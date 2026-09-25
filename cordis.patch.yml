@@ -4,12 +4,17 @@
 # 插件挂载声明。DSH 启动时按 bundle 层栈叠加 patch，本文件把桌宠插件插入
 # Web profile 的配置树。
 #
-# 安装：
-#   dsh plugin --profile web add link:/绝对路径/dsh-live2d-pet
+# 安装（从 GitHub / npm）：
+#   dsh plugin --profile web add github:Andersen216/dsh-whale-girl-live2d
+# 安装（本地开发，link 到源码目录）：
+#   dsh plugin --profile web add "link:/绝对路径/dsh-whale-girl-live2d"
 # 卸载：
-#   dsh plugin --profile web remove dsh-live2d-pet
+#   dsh plugin --profile web remove dsh-whale-girl-live2d
+#
+# ⚠️ 下面 insert 的 `name:` 必须与安装后的**包名**完全一致，否则 DSH 找不到模块，
+#    表现为「装上了但桌宠不出现」。改包名时这里要一起改（踩过一次）。
 # ============================================================================
 
 - insert:
     - id: dsh-live2d-pet
-      name: dsh-live2d-pet
+      name: dsh-whale-girl-live2d
