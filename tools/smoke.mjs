@@ -747,6 +747,98 @@ async function main() {
       JSON.stringify({afterResetMoved: motionPose.afterResetMoved}),
     )
 
+    // 18.83) 眨眼节奏（主人要「正常人速度，偶尔眨一眨」）+ 聊天框对准头顶
+    const blinkInfo = JSON.parse(
+      await evaluate(`(async function(){
+        window.DSHPet.resetEverything();
+        await new Promise(function(res){ setTimeout(res, 800) });
+        var b0 = window.DSHPet.blink();
+        await new Promise(function(res){ setTimeout(res, 12000) });
+        var b1 = window.DSHPet.blink();
+        return JSON.stringify({start: b0, end: b1, added: (b1.count || 0) - (b0.count || 0)});
+      })()`),
+    )
+    check(
+      '12 秒内眨眼次数正常（1~6 次，不是一次不眨也不是狂眨）',
+      blinkInfo.added >= 1 && blinkInfo.added <= 6,
+      `12 秒眨了 ${blinkInfo.added} 次：${JSON.stringify(blinkInfo.end)}`,
+    )
+    check('眨眼闸门是通的（没有被动作/表情错误地拦住）', blinkInfo.end.gate === 'ok', JSON.stringify(blinkInfo.end))
+
+    const headAlign = JSON.parse(
+      await evaluate(`(async function(){
+        var root = document.getElementById('dsh-live2d-pet');
+        var out = [];
+        var spots = [['靠左墙', 8], ['中间', Math.round(window.innerWidth / 2 - 120)], ['靠右墙', window.innerWidth - 250]];
+        for (var k = 0; k < spots.length; k++) {
+          window.DSHPet.resetEverything();
+          await new Promise(function(res){ setTimeout(res, 380) });
+          root.style.left = spots[k][1] + 'px'; root.style.top = '380px';
+          root.style.right = 'auto'; root.style.bottom = 'auto';
+          await new Promise(function(res){ setTimeout(res, 280) });
+          document.querySelector('.dshp-dock').children[0].click();   // 打开聊天框
+          await new Promise(function(res){ setTimeout(res, 420) });
+          var pan = window.DSHPet.state.panels;
+          var box = document.querySelector('.dshp-composer.dshp-on').getBoundingClientRect();
+          out.push({where: spots[k][0], headX: pan.headX,
+            center: Math.round(box.left + box.width / 2),
+            inside: box.left >= 0 && box.right <= window.innerWidth,
+            offBy: Math.abs(Math.round(box.left + box.width / 2) - pan.headX)});
+          document.querySelector('.dshp-dock').children[0].click();   // 关掉
+          await new Promise(function(res){ setTimeout(res, 220) });
+        }
+        window.DSHPet.resetEverything();
+        return JSON.stringify(out);
+      })()`),
+    )
+    const alignMid = headAlign[1] || {}
+    const alignLeft = headAlign[0] || {}
+    const alignRight = headAlign[2] || {}
+    check(
+      '在屏幕中间时，聊天框正对她的头顶',
+      alignMid.offBy !== undefined && alignMid.offBy <= 30,
+      JSON.stringify(alignMid),
+    )
+    check('聊天框在三种位置都完整落在屏幕里（不会被墙切掉）', headAlign.every((p) => p.inside === true), JSON.stringify(headAlign))
+    check(
+      '靠左墙时聊天框往右让（对着头顶但被墙挤回屏内）',
+      alignLeft.inside === true && alignLeft.center >= alignLeft.headX,
+      JSON.stringify(alignLeft),
+    )
+    check(
+      '靠右墙时聊天框往左让',
+      alignRight.inside === true && alignRight.center <= alignRight.headX,
+      JSON.stringify(alignRight),
+    )
+
+    // 18.85) 眼睛必须是睁的（主人报的「一直闭着眼，啥也干不了」）
+    //   根因：clearMotionPose 用错了框架接口 —— getParameterDefaultValue 收的是「下标」不是 id，
+    //   传 id 拿到 undefined，我的兜底又把 0 当默认值 → 睁眼参数被写成 0 并永久存进快照。
+    const eyes = JSON.parse(
+      await evaluate(`(async function(){
+        window.DSHPet.resetEverything();
+        await new Promise(function(res){ setTimeout(res, 900) });
+        var fresh = window.DSHPet.eyes();
+        var defL = window.DSHPet.paramDefault('ParamEyeLOpen');
+        var defR = window.DSHPet.paramDefault('ParamEyeROpen');
+        window.DSHPet.playAction('omurice');
+        await new Promise(function(res){ setTimeout(res, 8500) });   // 等动作彻底结束
+        var afterAction = window.DSHPet.eyes();
+        window.DSHPet.resetEverything();
+        await new Promise(function(res){ setTimeout(res, 1200) });
+        var afterReset = window.DSHPet.eyes();
+        return JSON.stringify({fresh: fresh, defL: defL, defR: defR, afterAction: afterAction, afterReset: afterReset});
+      })()`),
+    )
+    check(
+      '取默认值用的是「下标」不是 id（取不到就跳过，绝不猜 0）',
+      eyes.defL !== null && eyes.defL > 0.5 && eyes.defR !== null && eyes.defR > 0.5,
+      JSON.stringify({ParamEyeLOpen: eyes.defL, ParamEyeROpen: eyes.defR}),
+    )
+    check('空闲状态两只眼睛是睁开的', eyes.fresh !== null && eyes.fresh > 0.9, String(eyes.fresh))
+    check('动作演完之后眼睛还是睁的（不会闭着眼卡住）', eyes.afterAction !== null && eyes.afterAction > 0.9, String(eyes.afterAction))
+    check('一键重置之后眼睛也是睁的', eyes.afterReset !== null && eyes.afterReset > 0.9, String(eyes.afterReset))
+
     // 18.9) 面板往哪边开：靠左墙就往右开、靠右墙就往左开，而且不能一次左一次右
     const panelSide = JSON.parse(
       await evaluate(`(async function(){

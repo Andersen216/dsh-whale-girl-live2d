@@ -1042,6 +1042,45 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       }
     }
 
+    // —— 眨眼（自然节奏，见 blinkTick）——
+    blinkTick(now, claimed.has('ParamEyeLOpen') || claimed.has('ParamEyeROpen'), motionActive())
+
+    // —— 眼睛自愈 ——
+    // 万一还有哪条路径把「睁眼」参数冻在 0（闭眼），这里把它纠回来。
+    // 只在「没有动作在播 + 我们自己的表情/道具都没认领眼睛参数 + 已经闭了 1.5 秒以上」时才动手，
+    // 所以不会跟眨眼（一次 0.1 秒）、也不会跟「闭眼口水」这种真的闭眼表情打架。
+    if (coreModel && model && !rig.eyesHeal) rig.eyesHeal = { since: 0, warned: false }
+    if (rig.eyesHeal) {
+      const eL = 'ParamEyeLOpen'
+      const eR = 'ParamEyeROpen'
+      const claimedEye = claimed.has(eL) || claimed.has(eR)
+      const motionOn = motionActive()
+      const v = eyesOpen()
+      if (!claimedEye && !motionOn && v !== null && v < 0.25) {
+        if (!rig.eyesHeal.since) rig.eyesHeal.since = now
+        else if (now - rig.eyesHeal.since > 1500) {
+          for (const id of [eL, eR]) {
+            const d = paramDefault(id)
+            if (d !== null) {
+              try {
+                coreModel.setParameterValueById(id, d)
+              } catch (e) {}
+            }
+          }
+          try {
+            coreModel.saveParameters()
+          } catch (e) {}
+          rig.eyesHeal.since = 0
+          if (!rig.eyesHeal.warned) {
+            rig.eyesHeal.warned = true
+            log('检测到眼睛被冻住，已按默认值纠回（自愈）')
+          }
+        }
+      } else {
+        rig.eyesHeal.since = 0
+      }
+    }
+
     // 诊断：这一帧有多少次「因为参数已被占用而放弃写入」。
     // 它 > 0 就说明独占裁决真的在起作用（两个表情想写同一个参数时被打回）。
     rig.exclusive = { written: delta.size, skipped, writers: winners }
@@ -1062,6 +1101,17 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   const FACE_DRIVING_MOTIONS = new Set(['bubble', 'aidale', 'selfie', 'selfieQuick'])
   const BANNED_MOTIONS = FACE_DRIVING_MOTIONS
 
+  /**
+   * 动作是否正在播。
+   * 不用框架的 `motionManager.isFinished()` —— 实测它空闲时也返回「没结束」，
+   * 会让「动作期间不眨眼」永远成立（之前眨眼就是这么被憋住的）。
+   * 改成我们自己记账：起动作时按清单里的时长记一个截止时间。
+   */
+  let motionUntil = 0
+  function motionActive() {
+    return performance.now() < motionUntil
+  }
+
   function playMotion(group, priority) {
     if (!model || !manifest) return
     if (BANNED_MOTIONS.has(group)) return
@@ -1069,6 +1119,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       log('没有这个动作：', group)
       return
     }
+    const dur = Number(manifest.motions[group].duration) || 1.5
+    motionUntil = performance.now() + dur * 1000 + 120
     try {
       // 第三参是优先级（数字）：FORCE 才能盖过常驻待机循环
       model.motion(group, 0, priority == null ? MOTION_PRIORITY.FORCE : priority)
@@ -1127,16 +1179,20 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       for (const id of meta.params || []) ids.add(id)
     }
     let n = 0
+    let bad = 0
     for (const id of ids) {
       try {
-        let def = 0
-        if (typeof coreModel.getParameterDefaultValue === 'function') {
-          const d = coreModel.getParameterDefaultValue(id)
-          if (typeof d === 'number' && Number.isFinite(d)) def = d
-        }
+        const def = paramDefault(id)
+        // 取不到默认值的参数一律**不要碰**！之前就是在这里把「睁眼」参数当成了 0，
+        // 结果把眼睛永久设成闭着的（主人报的「一直闭着眼，啥也干不了」）。
+        if (def === null) { bad++; continue }
         if (typeof coreModel.setParameterValueById === 'function') coreModel.setParameterValueById(id, def)
         n++
       } catch (e) {}
+    }
+    if (bad && !clearMotionPose._warned) {
+      clearMotionPose._warned = true
+      log(`有 ${bad} 个动作参数取不到默认值，已跳过（绝不猜 0）`)
     }
     try {
       if (typeof coreModel.saveParameters === 'function') coreModel.saveParameters()
@@ -1144,8 +1200,115 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return n
   }
 
+  /**
+   * 眨眼控制器。
+   *
+   * 主人要求：「不要眨太快、不要眨太慢，符合正常人眨眼速度，偶尔眨一眨」。
+   * 人类大概是每 3~5 秒眨一次，单次 0.1~0.2 秒，偶尔会连眨两下。
+   * 框架自带的实现是「下次眨眼 = random × 7 秒」，范围太野，所以这里自己来：
+   *   · 间隔：2.6~5.4 秒随机；15% 概率紧接着再眨一下（连眨）
+   *   · 单次时长：闭合 60ms + 闭合保持 30ms + 睁开 100ms ≈ 0.19 秒
+   *   · 动作在播、或者有表情/道具正在写眼睛参数（比如「闭眼口水」）时**不眨**
+   */
+  const blink = { nextAt: 0, phase: 'idle', t0: 0, queue: 0, gate: '', count: 0 }
+
+  function blinkTick(now, eyeClaimed, motionOn) {
+    if (!coreModel) { blink.gate = 'no-model'; return }
+    if (eyeClaimed || motionOn) {
+      blink.gate = eyeClaimed ? 'eye-claimed' : 'motion-on'
+      blink.phase = 'idle'
+      blink.nextAt = now + 1200
+      return
+    }
+    blink.gate = 'ok'
+    const set = (v) => {
+      try {
+        coreModel.setParameterValueById('ParamEyeLOpen', v)
+        coreModel.setParameterValueById('ParamEyeROpen', v)
+      } catch (e) {}
+    }
+    const CLOSE = 60
+    const HOLD = 30
+    const OPEN = 100
+    if (blink.phase === 'idle') {
+      if (!blink.nextAt) blink.nextAt = now + 900 + Math.random() * 2600
+      if (now >= blink.nextAt) {
+        blink.phase = 'closing'
+        blink.t0 = now
+        blink.count++
+        blink.queue = Math.random() < 0.15 ? 1 : 0 // 偶尔连眨两下
+      } else {
+        return
+      }
+    }
+    const dt = now - blink.t0
+    if (blink.phase === 'closing') {
+      set(1 - Math.min(1, dt / CLOSE))
+      if (dt >= CLOSE) {
+        blink.phase = 'closed'
+        blink.t0 = now
+      }
+    } else if (blink.phase === 'closed') {
+      set(0)
+      if (dt >= HOLD) {
+        blink.phase = 'opening'
+        blink.t0 = now
+      }
+    } else if (blink.phase === 'opening') {
+      set(Math.min(1, dt / OPEN))
+      if (dt >= OPEN) {
+        blink.phase = 'idle'
+        if (blink.queue > 0) {
+          blink.queue = 0
+          blink.nextAt = now + 180 // 连眨：紧接着再来一下
+        } else {
+          blink.nextAt = now + 2600 + Math.random() * 2800
+        }
+      }
+    }
+  }
+
+  /**
+   * 取某个参数的默认值。**框架的 getParameterDefaultValue 收的是「下标」不是 id**，
+   * 传 id 会拿到 undefined —— 若拿不到就返回 null，调用方必须跳过这个参数，
+   * 绝不能拿 0 当默认值（会把「睁眼」写成「闭眼」，就是那次事故）。
+   */
+  function paramDefault(id) {
+    if (!coreModel) return null
+    try {
+      const idx = typeof coreModel.getParameterIndex === 'function' ? coreModel.getParameterIndex(id) : -1
+      if (typeof idx !== 'number' || idx < 0) return null
+      if (typeof coreModel.getParameterDefaultValue !== 'function') return null
+      const d = coreModel.getParameterDefaultValue(idx)
+      if (typeof d !== 'number' || !Number.isFinite(d)) return null
+      return d
+    } catch (e) {
+      return null
+    }
+  }
+
+  function paramValue(id) {
+    if (!coreModel) return null
+    try {
+      const v = coreModel.getParameterValueById(id)
+      return typeof v === 'number' && Number.isFinite(v) ? v : null
+    } catch (e) {
+      return null
+    }
+  }
+
+  /** 眼睛当前睁着没：0 = 闭，1 = 睁（返回两只眼的平均值，方便诊断与自愈） */
+  function eyesOpen() {
+    const l = paramValue('ParamEyeLOpen')
+    const r = paramValue('ParamEyeROpen')
+    if (l === null && r === null) return null
+    const vals = [l, r].filter((v) => v !== null)
+    return +(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(3)
+  }
+
   /** 停掉所有正在播的动作，让模型回到默认姿势。 */
   function stopMotion() {
+    motionUntil = 0
     try {
       const mm = model && model.internalModel && model.internalModel.motionManager
       if (mm && typeof mm.stopAllMotions === 'function') mm.stopAllMotions()
@@ -1299,6 +1462,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // rig 挂载点：model.update() 之前的最后一站
     internal.on('beforeModelUpdate', applyRig)
 
+    // 关掉框架自带的眨眼，改用我们自己的 blinkTick（节奏更像人）
+    try {
+      if (internal.eyeBlink) internal.eyeBlink = undefined
+    } catch (e) {}
+
 
     // 掩码在 postrender 里采：此刻 WebGL 缓冲刚画好，且模型的世界变换已生效。
     // 必须在测量之前注册——测量就是靠它把画面读出来算实体范围的。
@@ -1348,6 +1516,26 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *   · 在右半边（右边是墙）→ 面板往**左**开
    * 然后兜底夹进视口，保证整个面板（含右上角的 ×）都在屏幕里。
    */
+  /**
+   * 她脑袋在屏幕上的横坐标。
+   * 主人要的是「聊天框放在正头顶」，而桌宠的根节点包含整张书桌场景，
+   * 根节点中心 ≠ 脑袋中心，所以这里用测量出来的「头部重心」换算成屏幕坐标。
+   */
+  function headScreenX() {
+    const r = ui.root.getBoundingClientRect()
+    try {
+      const b = contentBox && contentBox.bands
+      const head = b && b.head && b.head.center
+      const view = b && b.full && b.full.center
+      if (typeof head === 'number' && typeof view === 'number' && lastView && model) {
+        const baseW = model.internalModel.width || model.internalModel.originalWidth || 0
+        const dx = (head - view) * baseW * (lastView.scale || 0)
+        if (Number.isFinite(dx) && Math.abs(dx) < r.width) return r.left + r.width / 2 + dx
+      }
+    } catch (e) {}
+    return r.left + r.width / 2
+  }
+
   function placePanel(panel) {
     if (!panel) return
     const vw = window.innerWidth
@@ -1357,13 +1545,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const w = panel.getBoundingClientRect().width || 0
     if (!w) return
     const r = ui.root.getBoundingClientRect()
-    const center = r.left + r.width / 2
-    const onLeftHalf = center < vw / 2
-    // 面板基准是「以桌宠中心居中」（left:50% + translateX(-50%)），所以位移 = 想要的位置 - 居中位置
-    let shift = onLeftHalf
-      ? r.left + w / 2 - center // 往右开：面板左边缘对齐桌宠左边
-      : r.right - w / 2 - center // 往左开：面板右边缘对齐桌宠右边
-    const left = center + shift - w / 2
+    const anchor = headScreenX() // 对准头顶，而不是整个场景的中心
+    // 面板基准是「以桌宠中心居中」（left:50% + translateX(-50%)），所以位移 = 锚点 - 根节点中心
+    let shift = anchor - (r.left + r.width / 2)
+    // 靠墙时往反方向挪，保证整个面板（含 × ）都在屏幕里
+    const left = anchor + shift - w / 2
     if (left < pad) shift += pad - left
     else if (left + w > vw - pad) shift -= left + w - (vw - pad)
     panel.style.setProperty('--dshp-shift', Math.round(shift) + 'px')
@@ -3964,6 +4150,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       }
       return { group, ids: ids.slice(0, 8), total: ids.length, values: ids.map(read), defaults: ids.map(def) }
     },
+    /** 诊断用：读某个参数当前值 / 默认值；eyes() 返回眼睛睁开程度（0 闭 1 睁）。 */
+    paramValue: (id) => paramValue(id),
+    paramDefault: (id) => paramDefault(id),
+    eyes: () => eyesOpen(),
+    /** 诊断用：眨眼的当前状态（测试用它数「15 秒眨了几次」）。 */
+    blink: () => ({ phase: blink.phase, gate: blink.gate, count: blink.count,
+      nextIn: Math.max(0, Math.round(blink.nextAt - performance.now())) }),
     /** 诊断用：主动清一次动作姿势（测试与 /control 都能用）。 */
     clearMotionPose: () => clearMotionPose(),
     /** 诊断用：HUD（余额/计价面板）状态与当前显示的文字。 */
@@ -4055,6 +4248,25 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         device: { out: device.out },
         modelSize: model ? { w: model.internalModel.width, h: model.internalModel.height } : null,
         view: lastView,
+        panels: (() => {
+          const read = (el) => {
+            if (!el) return null
+            const cs = getComputedStyle(el)
+            const r = el.getBoundingClientRect()
+            return {
+              on: el.classList.contains('dshp-on'),
+              shift: cs.getPropertyValue('--dshp-shift').trim() || '0px',
+              left: Math.round(r.left), right: Math.round(r.right), w: Math.round(r.width),
+            }
+          }
+          return {
+            headX: Math.round(headScreenX()),
+            rootCenter: ui && ui.root ? Math.round(ui.root.getBoundingClientRect().left + ui.root.getBoundingClientRect().width / 2) : null,
+            menu: read(ui && ui.menu && ui.menu.el),
+            composer: read(ui && ui.composer && ui.composer.el),
+            hud: read(ui && ui.hud && ui.hud.el),
+          }
+        })(),
         placement: (() => {
           const r = ui && ui.root ? ui.root.getBoundingClientRect() : null
           return {
@@ -4067,7 +4279,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         })(),
         contentBox,
         exclusive: rig.exclusive || null,
-        motion: { playing: !!motionTimer },
+        motion: { playing: !!motionTimer || motionActive(), active: motionActive() },
         acting: acting ? { left: Math.max(0, Math.round(acting.until - performance.now())) } : null,
         // 诊断用：视线控制器 + 框架里真正生效的焦点值（测试靠它验证「有没有阻尼住」）
         gaze: {
