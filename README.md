@@ -340,12 +340,40 @@ dsh-live2d-pet/
 ## 装到别的 DSH 上 / 发布
 
 ```bash
-# 从 GitHub 装
-dsh plugin --profile web add github:Andersen216/dsh-pet-live2d
+# ① 从 GitHub 装（推荐）
+dsh plugin --profile web add github:Andersen216/dsh-whale-girl-live2d
 
-# 或本地 link（开发用）
-dsh plugin --profile web add "link:/绝对路径/dsh-live2d-pet"
+# ② 或本地 link（开发用）
+dsh plugin --profile web add "link:/绝对路径/dsh-whale-girl-live2d"
+
+# 装完**必须重启 DSH**（宿主插件是启动时加载的），然后刷新页面
+# 卸载
+dsh plugin --profile web remove dsh-whale-girl-live2d
 ```
+
+### Windows 用户看这里
+
+命令一样（PowerShell / CMD 都行），只有「手动下载 ZIP」那条路要换成 Windows 写法：
+
+```powershell
+# 解压到比如 C:\Users\你的用户名\Documents\dsh-whale-girl-live2d 之后：
+dsh plugin --profile web add "link:C:\Users\你的用户名\Documents\dsh-whale-girl-live2d"
+```
+
+- 路径**一定用引号包起来**（有空格或反斜杠时更需要）
+- 装完重启 DSH 再刷新页面
+
+### 装上了但桌宠不出现？按顺序查这四条
+
+| 现象 | 原因 | 怎么办 |
+| --- | --- | --- |
+| `dsh: command not found` | DSH 没装或没进 PATH | 先装好 DeepSeek Harness；临时可用 `npx @deepseek-ai/dsh plugin ...` |
+| 装完刷新页面什么都没有 | **宿主插件要重启 DSH 才加载** | 重启 DSH，再刷新（强刷：`Cmd+Shift+R` / `Ctrl+F5`） |
+| 重启后还是没有 | 看 DSH 启动日志有没有 `dsh-whale-girl-live2d` 的报错 | 多半是 `cordis.patch.yml` 里 `name:` 与包名不一致 |
+| 连 `/dsh-pet/pet.js` 都 404 | 插件没被注册进 profile | 检查 profile 的 `package.json`：`dependencies` 与 `dsh.profile.bundles` 里都要有 `dsh-whale-girl-live2d` |
+
+> 一行自检：重启后访问 `http://127.0.0.1:3080/dsh-pet/pet.js` ——
+> **401** = 插件已挂载（被信任栅栏挡着，正常）；**404** = 没加载。
 
 想发布到 **DSH 插件市场**（`dshmarket`）的话，看
 [`docs/发布到插件市场.md`](docs/发布到插件市场.md)：里面有 npm 命名、
