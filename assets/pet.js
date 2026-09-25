@@ -1483,71 +1483,81 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    * 靠近左下/右下角 → 直接记成「角落模式」（窗口大小变了也跟着走）；
    * 只贴某一边 → 固定那一轴，另一轴保持自由。
    */
+  /**
+   * 松手时的贴边吸附。
+   *
+   * 主人改的规矩（原话）：「只吸附右边、不吸附底，我可以随意调整高低，
+   * 但只吸附右边或左边的墙壁」——所以这里**只看左右**：
+   *   · 靠左墙 / 靠右墙 → 吸过去，竖直位置保持你松手的那个高度
+   *   · 离两边都远 → 就停在原地（竖直方向永远不吸）
+   * 竖直方向只做一件事：别让底下的三个按钮被屏幕切掉（软性夹一下，不是吸附）。
+   */
   function snapOnRelease() {
     const vw = window.innerWidth
     const vh = window.innerHeight
     const r = ui.root.getBoundingClientRect()
-    const dock = dockClearance()
-    const leftGap = r.left
-    const rightGap = vw - r.right
-    const bottomGap = vh - (r.bottom + dock)
-    const nearL = leftGap < SNAP_DIST
-    const nearR = rightGap < SNAP_DIST
-    const nearB = bottomGap < SNAP_DIST
+    const nearL = r.left < SNAP_DIST
+    const nearR = vw - r.right < SNAP_DIST
+    if (!nearL && !nearR) return false // 底部不再吸附
 
-    if (!nearL && !nearR && !nearB) return false
-
-    // 贴角：左下 / 右下
-    if ((nearL || nearR) && nearB) {
-      const corner = nearR ? 'br' : 'bl'
-      ui.root.style.left = ''
-      ui.root.style.top = ''
-      ui.root.dataset.corner = corner
-      applyCorner(corner)
-      saveLayout({ x: null, y: null, corner })
-      return true
-    }
-
-    // 只贴一边
-    let left = r.left
-    let top = r.top
-    if (nearR) left = vw - r.width - EDGE_GAP
-    else if (nearL) left = EDGE_GAP
-    if (nearB) top = vh - r.height - dock - EDGE_GAP
-    left = clamp(left, -40, vw - 60)
-    top = clamp(top, -20, vh - 60)
-    glideTo(left, top)
-    saveLayout({ x: Math.round(left), y: Math.round(top), corner: null })
+    const edge = nearR ? 'right' : 'left'
+    const y = clampY(r.top, r.height, vh)
+    const left = edge === 'left' ? EDGE_GAP : vw - r.width - EDGE_GAP
+    glideTo(left, y)
+    // 记成「贴哪一边 + 竖直位置」，窗口大小变了也还贴着那一边、高低不动
+    saveLayout({ x: null, y: null, corner: null, edge, edgeY: Math.round(y) })
+    ui.root.dataset.edge = edge
     return true
   }
 
-  /** 按角落摆放（贴角后窗口大小变了也保持贴住） */
-  function applyCorner(corner) {
-    const root = ui.root
-    const off = EDGE_GAP
-    const bottomOff = Math.round(EDGE_GAP + 0) + 'px'
-    root.style.right = 'auto'
-    root.style.left = 'auto'
-    root.style.bottom = 'auto'
-    root.style.top = 'auto'
-    if (corner === 'br' || corner === 'bl') root.style.bottom = bottomOff
-    else root.style.top = Math.round(64) + 'px'
-    if (corner === 'br' || corner === 'tr') root.style.right = off + 'px'
-    else root.style.left = off + 'px'
+  /** 竖直位置的安全范围：上面别顶出屏幕，下面给工具栏留出位置（不是吸附，只是夹一下） */
+  function clampY(top, height, vh) {
+    const dock = dockClearance()
+    const maxTop = Math.max(-20, (vh || window.innerHeight) - height - dock - 4)
+    return clamp(top, -20, maxTop)
   }
 
+  /** 贴住某一侧墙：left/right + top 固定，竖直位置由主人自己定 */
+  function applyEdge(edge, y) {
+    const root = ui.root
+    const yy = clampY(Number(y) || 0, root.getBoundingClientRect().height || 0, window.innerHeight)
+    root.style.left = edge === 'left' ? EDGE_GAP + 'px' : 'auto'
+    root.style.right = edge === 'right' ? EDGE_GAP + 'px' : 'auto'
+    root.style.top = Math.round(yy) + 'px'
+    root.style.bottom = 'auto'
+    root.dataset.edge = edge
+  }
+
+  /**
+   * 摆放位置。三种存档：
+   *   · edge + edgeY —— 贴左/右墙，竖直位置自由（**现在吸附后存的就是这种**）
+   *   · x + y        —— 完全自由摆放
+   *   · corner       —— 老存档（左下/右下那种），读到时自动迁移成 edge 形式，竖直位置按角落换算
+   */
   function applyPosition(layout) {
     const root = ui.root
-    if (layout.x != null && layout.y != null) {
-      root.style.left = layout.x + 'px'
-      root.style.top = layout.y + 'px'
-      root.style.right = 'auto'
-      root.style.bottom = 'auto'
+    const vh = window.innerHeight
+    const h = root.getBoundingClientRect().height || 0
+    const dock = dockClearance()
+
+    if (layout.edge === 'left' || layout.edge === 'right') {
+      applyEdge(layout.edge, layout.edgeY != null ? layout.edgeY : vh - h - dock - EDGE_GAP)
       return
     }
+    if (layout.x != null && layout.y != null) {
+      root.style.left = layout.x + 'px'
+      root.style.top = clampY(layout.y, h, vh) + 'px'
+      root.style.right = 'auto'
+      root.style.bottom = 'auto'
+      root.dataset.edge = ''
+      return
+    }
+    // 老存档 / 首次启动：按角落算一次，然后就地存成 edge 形式（下次就是新的了）
     const corner = layout.corner || CFG.corner || 'br'
-    root.dataset.corner = corner
-    applyCorner(corner)
+    const edge = corner === 'bl' || corner === 'tl' ? 'left' : 'right'
+    const y = corner === 'tr' || corner === 'tl' ? 64 : vh - h - dock - EDGE_GAP
+    applyEdge(edge, y)
+    saveLayout({ corner: null, edge, edgeY: Math.round(clampY(y, h, vh)) })
   }
 
   // ——————————————————————————————————————————————————————————————
@@ -1864,15 +1874,16 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     let py = parseFloat(el.style.top) || 0
     let sx = vx
     let sy = vy
+    const h = el.getBoundingClientRect().height
     const step = () => {
       sx *= 0.85
       sy *= 0.85
       px = clamp(px + sx, -40, window.innerWidth - 60)
-      py = clamp(py + sy, -20, window.innerHeight - 60)
+      py = clampY(py + sy, h, window.innerHeight)
       el.style.left = px + 'px'
       el.style.top = py + 'px'
       if (Math.abs(sx) > 0.4 || Math.abs(sy) > 0.4) requestAnimationFrame(step)
-      else saveLayout({ x: Math.round(px), y: Math.round(py) })
+      else saveLayout({ x: Math.round(px), y: Math.round(py), edge: null, edgeY: null, corner: null })
     }
     requestAnimationFrame(step)
   }
@@ -1960,7 +1971,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const hideBtn = $('button', 'dshp-btn', '–')
     dock.append(talkBtn, menuBtn, hideBtn)
 
-    const composer = $('div', 'dshp-panel')
+    const composer = $('div', 'dshp-panel dshp-composer')
     const ta = $('textarea')
     ta.placeholder = '跟 DSH 说点什么…（Enter 发送 / Shift+Enter 换行）'
     const crow = $('div', 'dshp-row')
@@ -1971,7 +1982,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     composer.append(ta, crow, chint)
     addCloseButton(composer)
 
-    const menu = $('div', 'dshp-panel')
+    const menu = $('div', 'dshp-panel dshp-menu')
     const tabs = $('div', 'dshp-tabs')
     const panes = $('div')
     menu.append(tabs, panes)
@@ -2005,7 +2016,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       hudRowTurn, hudRowToday, hudRowCd,
       hudFoot,
     )
-    addCloseButton(hud)
+    addCloseButton(hud, () => closeHud())
 
     root.append(stage, bubbleEl, dock, composer, menu, hud)
     document.body.append(root, tab)
@@ -2122,8 +2133,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
           const dy = e.clientY - start.my
           if (!dragMoved && Math.abs(dx) + Math.abs(dy) > 4) dragMoved = true
           if (dragMoved) {
+            const nh = root.getBoundingClientRect().height
             const nx = clamp(start.left + dx, -40, window.innerWidth - 60)
-            const ny = clamp(start.top + dy, -20, window.innerHeight - 60)
+            // 竖直方向随便放，但别放到连底下三个按钮都被屏幕切掉
+            const ny = clampY(start.top + dy, nh, window.innerHeight)
             // 身体随拖动方向摇摆：横向速度直接喂给身体的倾斜
             drag.vx = nx - (parseFloat(root.style.left) || nx)
             drag.vy = ny - (parseFloat(root.style.top) || ny)
@@ -2153,6 +2166,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         e.preventDefault()
         dragging = true
         dragMoved = false
+        delete root.dataset.edge // 一拖就离开墙，别再显示「贴着左边」
         const r = root.getBoundingClientRect()
         start = { mx: e.clientX, my: e.clientY, left: r.left, top: r.top }
       },
@@ -2199,16 +2213,21 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     document.addEventListener(
       'dblclick',
       (e) => {
+        // 主人要求：输入框只从工具栏的「说话」按钮开，双击鱼身不再弹它。
+        // 双击仍然算一次戳她（第一下 click 已经触发过了），这里只吃掉默认行为。
         if (!hitTest(e.clientX, e.clientY)) return
         e.preventDefault()
-        openMenu('talk')
       },
       true,
     )
 
     window.addEventListener('resize', () => {
       fitModel()
-      if (root.style.left && root.style.left !== 'auto') {
+      const layout = readLayout()
+      // 贴着左/右墙的：重新贴住那一侧（竖直位置不变，只夹进可见范围）
+      if (layout.edge === 'left' || layout.edge === 'right') {
+        applyPosition(layout)
+      } else if (root.style.left && root.style.left !== 'auto') {
         root.style.left = clamp(parseFloat(root.style.left) || 0, -40, window.innerWidth - 60) + 'px'
         root.style.top = clamp(parseFloat(root.style.top) || 0, -20, window.innerHeight - 60) + 'px'
       }
@@ -2247,6 +2266,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       'pointerdown',
       (e) => {
         if (!hud.open) return
+        if (e.button !== 0) return // 右键不在这里处理，交给 contextmenu 做「再按一次收起」
         const t = e.target
         if (t && (t === ui.hud.el || ui.hud.el.contains(t))) return
         closeHud()
@@ -2992,13 +3012,16 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   }
 
   /** 给面板右上角加一个「×」——主人说之前不好关。 */
-  function addCloseButton(panel) {
+  function addCloseButton(panel, onClose) {
     const b = $('button', 'dshp-close', '×')
     b.title = '关闭'
     b.setAttribute('aria-label', '关闭')
     b.addEventListener('click', (e) => {
       e.stopPropagation()
-      closePanels()
+      // 以前不管哪个面板都去 closePanels()，于是「钱包」的 × 点了没反应
+      // （钱包不是 closePanels 管的），主人报的「关闭键是坏的」就是这个。
+      if (typeof onClose === 'function') onClose()
+      else closePanels()
     })
     panel.appendChild(b)
   }
@@ -3957,6 +3980,16 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         device: { out: device.out },
         modelSize: model ? { w: model.internalModel.width, h: model.internalModel.height } : null,
         view: lastView,
+        placement: (() => {
+          const r = ui && ui.root ? ui.root.getBoundingClientRect() : null
+          return {
+            edge: (ui && ui.root && ui.root.dataset.edge) || null,
+            left: r ? Math.round(r.left) : null,
+            top: r ? Math.round(r.top) : null,
+            right: r ? Math.round(window.innerWidth - r.right) : null,
+            bottom: r ? Math.round(window.innerHeight - r.bottom) : null,
+          }
+        })(),
         contentBox,
         exclusive: rig.exclusive || null,
         motion: { playing: !!motionTimer },

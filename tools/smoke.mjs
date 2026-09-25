@@ -631,8 +631,77 @@ async function main() {
     check('结束后底层状态回到平常', settled.base === 'neutral', String(settled.base))
     check('结束后道具回到「本子 + 笔」', settled.props.join() === '点菜按下,画笔', settled.props.join())
 
-    // 19) 拖到边上要吸附（左下 / 右下角）
-    const dragTo = (txPct, tyPct) => `(function(){
+    // 18.5) 三个交互细节（主人报的）
+    //   · 双击鱼身不该弹输入框，只有工具栏「说话」才开
+    //   · 钱包的 × 要真的能关
+    //   · 右键点一次开、再点一次关
+    const uiFix = JSON.parse(
+      await evaluate(`(async function(){
+        window.DSHPet.resetEverything();
+        window.DSHPet.hud.hide();
+        await new Promise(function(res){ setTimeout(res, 350) });
+        var root = document.getElementById('dsh-live2d-pet');
+        var composerOn = function(){ return !!document.querySelector('.dshp-composer.dshp-on'); };
+        var hudOn = function(){ return window.DSHPet.hud.open(); };
+        var out = {};
+
+        // 双击鱼身
+        var st = document.querySelector('.dshp-stage').getBoundingClientRect();
+        var pt = null;
+        for (var i = 1; i <= 12 && !pt; i++) for (var j = 1; j <= 12 && !pt; j++) {
+          var x = st.left + st.width * i / 13, y = st.top + st.height * j / 13;
+          if (window.DSHPet.hitTest(x, y)) pt = {x: x, y: y};
+        }
+        if (pt) document.dispatchEvent(new MouseEvent('dblclick', {bubbles: true, cancelable: true, clientX: pt.x, clientY: pt.y}));
+        await new Promise(function(res){ setTimeout(res, 250) });
+        out.dblclickOpensComposer = composerOn();
+
+        // 点「说话」按钮
+        document.querySelector('.dshp-dock').children[0].click();
+        await new Promise(function(res){ setTimeout(res, 250) });
+        out.talkOpensComposer = composerOn();
+        // 关掉它
+        var cmp = document.querySelector('.dshp-composer.dshp-on');
+        if (cmp) cmp.querySelector('.dshp-close').click();
+        await new Promise(function(res){ setTimeout(res, 250) });
+        out.composerClosedByX = !composerOn();
+
+        // 钱包：右键开 → 右键关
+        root.classList.add('dshp-open');
+        if (pt) {
+          document.dispatchEvent(new MouseEvent('contextmenu', {bubbles: true, cancelable: true, clientX: pt.x, clientY: pt.y, button: 2}));
+          await new Promise(function(res){ setTimeout(res, 350) });
+          out.hudAfterFirstRightClick = hudOn();
+          document.dispatchEvent(new MouseEvent('contextmenu', {bubbles: true, cancelable: true, clientX: pt.x, clientY: pt.y, button: 2}));
+          await new Promise(function(res){ setTimeout(res, 350) });
+          out.hudAfterSecondRightClick = hudOn();
+        }
+
+        // 钱包的 ×
+        if (pt) {
+          document.dispatchEvent(new MouseEvent('contextmenu', {bubbles: true, cancelable: true, clientX: pt.x, clientY: pt.y, button: 2}));
+          await new Promise(function(res){ setTimeout(res, 350) });
+        }
+        var before = hudOn();
+        var x = document.querySelector('.dshp-hud .dshp-close');
+        out.hudHasX = !!x;
+        if (x) x.click();
+        await new Promise(function(res){ setTimeout(res, 300) });
+        out.hudOpenedBeforeX = before;
+        out.hudClosedByX = !hudOn();
+        return JSON.stringify(out);
+      })()`),
+    )
+    check('双击鱼身不再弹出输入框（只有「说话」按钮能开）', uiFix.dblclickOpensComposer === false, JSON.stringify(uiFix))
+    check('点工具栏「说话」仍然能开输入框', uiFix.talkOpensComposer === true, JSON.stringify(uiFix))
+    check('输入框的 × 能关掉', uiFix.composerClosedByX === true, JSON.stringify(uiFix))
+    check('右键点一次打开钱包', uiFix.hudAfterFirstRightClick === true, JSON.stringify(uiFix))
+    check('再点一次右键就关闭钱包（切换）', uiFix.hudAfterSecondRightClick === false, JSON.stringify(uiFix))
+    check('钱包的 × 能关掉（以前点了没反应）', uiFix.hudHasX && uiFix.hudOpenedBeforeX && uiFix.hudClosedByX, JSON.stringify(uiFix))
+
+    // 19) 拖放规则（主人新定的）：只吸左右墙，竖直位置随我调，底部永远不吸
+    const innerHeightHint = await evaluate('window.innerHeight')
+    const dragTo = (txPct, tyPct) => `(async function(){
       var r = document.getElementById('dsh-live2d-pet');
       r.style.transition = '';
       r.style.left = '260px'; r.style.top = '180px'; r.style.right = 'auto'; r.style.bottom = 'auto';
@@ -648,48 +717,58 @@ async function main() {
       var tx = Math.round(innerWidth * ${txPct}), ty = Math.round(innerHeight * ${tyPct});
       var o = {bubbles: true, cancelable: true, clientX: pt.x, clientY: pt.y, button: 0, buttons: 1, pointerId: 1, isPrimary: true};
       document.dispatchEvent(new PointerEvent('pointerdown', o));
-      document.dispatchEvent(new PointerEvent('pointermove', Object.assign({}, o, {clientX: tx, clientY: ty})));
+      // 分 8 小步移动，模拟真手（一步跨到底的话速度会大得离谱，惯性会把桌宠甩飞）
+      for (var s = 1; s <= 8; s++) {
+        var mx = Math.round(pt.x + (tx - pt.x) * s / 8);
+        var my = Math.round(pt.y + (ty - pt.y) * s / 8);
+        document.dispatchEvent(new PointerEvent('pointermove', Object.assign({}, o, {clientX: mx, clientY: my})));
+        await new Promise(function(res){ setTimeout(res, 25) });
+      }
       document.dispatchEvent(new PointerEvent('pointerup', Object.assign({}, o, {clientX: tx, clientY: ty, buttons: 0})));
+      // 贴边是滑过去的、没贴边还有惯性衰减，等它稳下来再量
+      await new Promise(function(res){ setTimeout(res, 900) });
       var rr = r.getBoundingClientRect();
       return JSON.stringify({
-        ok: true, corner: r.dataset.corner,
-        gapRight: Math.round(innerWidth - rr.right),
-        gapBottom: Math.round(innerHeight - rr.bottom),
+        ok: true, edge: r.dataset.edge, place: window.DSHPet.state.placement,
+        gapRight: Math.round(innerWidth - rr.right), gapLeft: Math.round(rr.left),
         layout: JSON.parse(localStorage.getItem('dsh-live2d-pet:layout') || '{}'),
       });
     })()`
-    const snapBR = JSON.parse(await evaluate(dragTo('0.97', '0.94')))
-    check('拖到右下角会吸附', snapBR.ok && snapBR.corner === 'br', JSON.stringify(snapBR))
-    check('吸附后确实贴住了右下边', snapBR.gapRight !== undefined && snapBR.gapRight <= 20, `右边距 ${snapBR.gapRight}px`)
-    const snapBL = JSON.parse(await evaluate(dragTo('0.03', '0.94')))
-    check('拖到左下角会吸附', snapBL.ok && snapBL.corner === 'bl', JSON.stringify(snapBL))
-    // 拖回右下，别把状态留给后面的用例
-    await evaluate(dragTo('0.97', '0.94'))
-    await evaluate('window.DSHPet.resetEverything()')
 
-    // 20) 「隐藏过一次之后还能不能起来」——这是主人实际踩到的坑：
-    //     隐藏态存进 localStorage，下次打开时初始化代码在 ui 赋值前调 setHidden，
-    //     直接抛异常，桌宠彻底起不来、右下角也没把手。必须回归。
-    await evaluate(`(function(){
-      var k='dsh-live2d-pet:layout';
-      var v=JSON.parse(localStorage.getItem(k)||'{}');
-      v.hidden = true;
-      localStorage.setItem(k, JSON.stringify(v));
-      return 1;
-    })()`)
-    await send('Page.navigate', { url: URL_ }, sessionId, 8000).catch(() => {})
-    await sleep(12000)
-    const afterHiddenReload = await evaluate(`(function(){
-      var r = document.getElementById('dsh-live2d-pet');
-      var t = document.querySelector('.dshp-tab');
-      return {
-        petAlive: !!(window.DSHPet && window.DSHPet.state && window.DSHPet.state.modelSize),
-        bootError: window.__DSHPetError || null,
-        hidden: r ? r.classList.contains('dshp-hidden') : null,
-        tabVisible: t ? getComputedStyle(t).display !== 'none' : false,
-        tabClickable: t ? getComputedStyle(t).pointerEvents !== 'none' : false,
-      };
-    })()`)
+    const snapR = JSON.parse(await evaluate(dragTo('0.97', '0.30')))
+    check('拖到右墙会吸附', snapR.ok && snapR.edge === 'right', JSON.stringify(snapR.place))
+    check('吸附后贴住右边', snapR.gapRight >= 0 && snapR.gapRight <= 20, `右边距 ${snapR.gapRight}px`)
+    check(
+      '贴右墙时没有被吸到底部（竖直位置是我放的高度）',
+      snapR.place.bottom > 100 && snapR.layout.edgeY != null,
+      JSON.stringify({bottom: snapR.place.bottom, edgeY: snapR.layout.edgeY}),
+    )
+
+    // 同一个右墙、拖到更低的位置 → 高度要跟着变（这就是主人要的「随意调高低」）
+    const snapRLow = JSON.parse(await evaluate(dragTo('0.97', '0.80')))
+    check(
+      '贴着同一面墙，竖直位置也能随便调（高低跟着手走）',
+      snapRLow.edge === 'right' && snapRLow.place.top - snapR.place.top > 150,
+      JSON.stringify({上: snapR.place.top, 下: snapRLow.place.top}),
+    )
+
+    const snapL = JSON.parse(await evaluate(dragTo('0.03', '0.5')))
+    check('拖到左墙会吸附', snapL.ok && snapL.edge === 'left', JSON.stringify(snapL.place))
+    check('吸附后贴住左边', snapL.gapLeft >= 0 && snapL.gapLeft <= 20, `左边距 ${snapL.gapLeft}px`)
+
+    // 关键：拖到底部中间不该被吸到底、也不该吸到侧边
+    const bottomMid = JSON.parse(await evaluate(dragTo('0.5', '0.97')))
+    check(
+      '拖到底部中间不吸附（底部不吸、离两侧远也不吸）',
+      !bottomMid.edge && bottomMid.layout.x != null && bottomMid.layout.y != null,
+      JSON.stringify({edge: bottomMid.edge, layout: bottomMid.layout}),
+    )
+    check(
+      '竖直位置不会被丢掉屏幕外（底下的按钮要留着）',
+      bottomMid.place.bottom >= -40,
+      JSON.stringify(bottomMid.place),
+    )
+
     check('隐藏态持久化后仍能正常启动', afterHiddenReload.petAlive === true, afterHiddenReload.bootError ? String(afterHiddenReload.bootError).split('\n')[0] : '')
     check('重新打开时保持隐藏但把手可见可点', afterHiddenReload.hidden === true && afterHiddenReload.tabVisible && afterHiddenReload.tabClickable, JSON.stringify(afterHiddenReload))
     // 清干净，别把隐藏态留给下一次

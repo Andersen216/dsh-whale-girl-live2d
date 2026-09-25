@@ -589,7 +589,15 @@ check('庆祝不再播 aidale，只用一个装饰 + CSS 蹦一下', /case 'turn
 check('不再常驻播 idle 动作（那是猫爪+爱心动画）', !/playMotion\('idle'/.test(petCode) && petCode.includes('function stopMotion'))
 check('UI 跟着模型缩放（比例不走样）', petCode.includes("UI_BASE_HEIGHT") && petCode.includes("setProperty('--dshp-s'") && petCode.includes('calc(12.5px * var(--dshp-s))'))
 check('默认尺寸约原来的 1/3 面积', /height: 180,/.test(petCode) && petCode.includes('UI_BASE_HEIGHT = 180'))
-check('松手会贴边吸附（左下/右下角）', petCode.includes('function snapOnRelease') && petCode.includes("corner = nearR ? 'br' : 'bl'") && petCode.includes('SNAP_DIST'))
+check(
+  '松手只吸附左右墙（竖直位置自由，不再吸底）',
+  petCode.includes('function snapOnRelease') &&
+    petCode.includes("const edge = nearR ? 'right' : 'left'") &&
+    petCode.includes('function applyEdge') &&
+    petCode.includes('SNAP_DIST') &&
+    !petCode.includes("corner = nearR ? 'br' : 'bl'"),
+)
+check('竖直位置只做「别被屏幕切掉」的软夹，不做吸附', /function clampY\(/.test(petCode) && petCode.includes('maxTop'))
 check('没注册 Expressions（避免和 rig 抢参数）', !JSON.parse(fs.readFileSync(path.join(ROOT, 'assets/model/c_0120.model3.json'), 'utf8')).FileReferences.Expressions)
 
 server.close()
