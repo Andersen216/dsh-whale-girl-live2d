@@ -1,0 +1,53 @@
+# 投稿到 DSH 插件市场的条目（已定稿，复制粘贴即用）
+
+**插件名**：`dsh-whale-girl-live2d`
+**中文名**：鲸鱼娘桌宠 —— DSH 里的 Live2D 鲸鱼娘
+**英文名**：Whale Girl Pet — the Live2D whale-girl companion for DeepSeek Harness
+**作者**：Andersen216（<https://github.com/Andersen216>）｜ **分类**：`fun` ｜ **许可**：代码 MIT / 模型素材 CC BY-NC-SA 4.0（非商业）
+
+---
+
+## 要提交的那个文件
+
+仓库：`https://github.com/Andersen216/dsh-whale-girl-live2d`
+文件：**`data/plugins/Andersen216__dsh-whale-girl-live2d.yml`**
+
+```yaml
+url: https://github.com/Andersen216/dsh-whale-girl-live2d
+name: Andersen216/dsh-whale-girl-live2d
+category: fun
+description:
+  en: 'A Live2D whale-girl companion for the DeepSeek Harness Web UI: the model stays on screen and reacts to what the agent is actually doing (thinking, tool calls, streaming text, errors, turn completion); click her to send the agent a message and watch the reply stream into a speech bubble; right-click for a menu of expressions, dress-up items, desk scenes and one-shot animations, every action mapped from the original model author hotkey sheet so nothing overlaps and everything expires on its own. Non-commercial model assets (CC BY-NC-SA 4.0), MIT code, by Andersen216 (https://github.com/Andersen216).'
+  zh: 'DSH 里的 Live2D 桌宠「鲸鱼娘」：模型常驻 Web 界面，跟着 agent 的真实状态换表情与动作（思考、调工具、逐字输出、报错、收工庆祝），点一下就能直接给 agent 发消息、回复逐字冒进气泡；右键菜单可换表情、戴眼镜贴纸、摆桌面场景、演一次性小动作，动作全部照模型作者自己的按键表设计，互不冲突、到点自动收回。模型素材非商业（CC BY-NC-SA 4.0），代码 MIT，作者 Andersen216。'
+```
+
+**一键提 PR**（GitHub 会自动先 fork，再把文件名和内容填进去）：
+
+<https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/new/main/data/plugins?filename=Andersen216__dsh-whale-girl-live2d.yml>
+
+---
+
+## 硬性要求（不满足会被打回）
+
+1. 仓库里要有 `package.json` 声明 **`dsh.bundle`**（指向 `cordis.patch.yml`），
+   并在同目录放 `cordis.patch.yml`。**只写 `dsh.client` 不算可安装**——最常见的被拒原因。
+   ✅ 本项目已满足（`package.json` → `dsh.bundle.patch = ./cordis.patch.yml`）。
+2. `url` 必须与仓库地址**完全一致**。
+3. `description.en` 必填；含「冒号 + 空格」时整行加引号（上面已经加好，用的是单引号）。
+4. `category` 用列表里的取值，桌宠最贴切的是 `fun`。
+
+## 备选仓库名（都被占过，记录一下免得再踩）
+
+| 名字 | npm | 说明 |
+| --- | --- | --- |
+| `dsh-whale-girl` | ❌ 已被 `nickkkkkk123123` 占用 | 「鲸鱼娘·灵动挂件」 |
+| `dsh-whale-girl-pet` | ❌ 已被 `yanzwzz` 占用 | 「DeepSeek 娘桌宠」 |
+| `dsh-whale-pet` | ❌ 已被 `eric0v0` 占用 | 另一个鲸鱼娘桌宠 |
+| **`dsh-whale-girl-live2d`** | ✅ 空闲 | 本插件（也避开了上面三个的撞名） |
+| `dsh-whale-girl-live2d`（GitHub） | ✅ 空闲 | 同名仓库 |
+
+## 收录 ≠ 背书
+
+README 里要写清：代码 MIT（Andersen216）；模型素材 CC BY-NC-SA 4.0、**非商业**，
+署名 上善无形 / ZipZipPipe / 氵六青；安装方式
+`dsh plugin --profile web add github:Andersen216/dsh-whale-girl-live2d`。

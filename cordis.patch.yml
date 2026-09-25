@@ -1,0 +1,15 @@
+# ============================================================================
+# dsh-live2d-pet —— DSH bundle patch
+# ============================================================================
+# 插件挂载声明。DSH 启动时按 bundle 层栈叠加 patch，本文件把桌宠插件插入
+# Web profile 的配置树。
+#
+# 安装：
+#   dsh plugin --profile web add link:/绝对路径/dsh-live2d-pet
+# 卸载：
+#   dsh plugin --profile web remove dsh-live2d-pet
+# ============================================================================
+
+- insert:
+    - id: dsh-live2d-pet
+      name: dsh-live2d-pet

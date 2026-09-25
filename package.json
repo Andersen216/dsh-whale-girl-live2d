@@ -1,0 +1,83 @@
+{
+  "name": "dsh-whale-girl-live2d",
+  "version": "0.2.0",
+  "description": "鲸鱼娘桌宠：把 Live2D 鲸鱼娘挂进 DSH Web 界面的桌宠插件——模型常驻桌面，跟着 agent 的真实状态换表情与动作，点一下就能直接跟 agent 说话，右键菜单可换表情 / 换装 / 摆场景 / 演小动作。（Whale Girl Pet: a Live2D companion for the DeepSeek Harness Web UI. Model assets are non-commercial, CC BY-NC-SA 4.0.）",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "live2d",
+    "cubism",
+    "desktop-pet",
+    "桌宠",
+    "鲸鱼娘",
+    "whale-girl"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "files": [
+    "lib",
+    "assets",
+    "docs",
+    "skill",
+    "cordis.patch.yml",
+    "README.md",
+    "CHANGELOG.md",
+    "AUTHORS.md",
+    "PROVENANCE.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "dsh-pet": "./tools/pet-ctl.mjs"
+  },
+  "scripts": {
+    "build:model": "node tools/build-model.mjs",
+    "preview": "node tools/preview-server.mjs",
+    "test": "node tools/test-host.mjs",
+    "smoke": "node tools/smoke.mjs",
+    "shot": "node tools/shot.mjs",
+    "test:e2e": "node tools/e2e.mjs",
+    "test:agent": "node tools/e2e-agent.mjs",
+    "ascii": "node tools/ascii.mjs",
+    "test:e2e:ui": "node tools/ui-probe.mjs",
+    "test:catalog": "node tools/catalog-test.mjs",
+    "repro:stuck": "node tools/repro-stuck.mjs",
+    "publish:check": "node tools/publish.mjs --check",
+    "publish": "node tools/publish.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Andersen216",
+    "url": "https://github.com/Andersen216"
+  },
+  "contributors": [
+    {
+      "name": "上善无形",
+      "url": "https://space.bilibili.com/4456176",
+      "role": "鲸鱼娘角色形象原作「溟月」"
+    },
+    {
+      "name": "ZipZipPipe",
+      "url": "https://space.bilibili.com/4168597",
+      "role": "女仆鲸鱼娘二次设计"
+    },
+    {
+      "name": "氵六青",
+      "url": "https://space.bilibili.com/11272072",
+      "role": "Live2D 模型制作（绑定/动作/表情）"
+    }
+  ],
+  "homepage": "https://github.com/Andersen216/dsh-whale-girl-live2d",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Andersen216/dsh-whale-girl-live2d.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Andersen216/dsh-whale-girl-live2d/issues"
+  }
+}
