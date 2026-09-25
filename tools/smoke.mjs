@@ -699,6 +699,124 @@ async function main() {
     check('再点一次右键就关闭钱包（切换）', uiFix.hudAfterSecondRightClick === false, JSON.stringify(uiFix))
     check('钱包的 × 能关掉（以前点了没反应）', uiFix.hudHasX && uiFix.hudOpenedBeforeX && uiFix.hudClosedByX, JSON.stringify(uiFix))
 
+    // 18.8) 动作演完之后，**模型参数**必须回到默认（主人报的「蛋包饭永远挂着」）
+    //   根因：框架把参数快照存在「动作写入之后」，动作停了快照里还是最后一帧的姿势，
+    //   每帧被 loadParameters() 装回来。光看 state 是看不出来的，必须读真实参数。
+    const motionPose = JSON.parse(
+      await evaluate(`(async function(){
+        window.DSHPet.resetEverything();
+        await new Promise(function(res){ setTimeout(res, 700) });
+        var before = window.DSHPet.motionParams('ketchup');
+        window.DSHPet.playAction('omurice');
+        await new Promise(function(res){ setTimeout(res, 2600) });
+        var during = window.DSHPet.motionParams('ketchup');
+        // 蛋包饭动作 ms=6200、动画本身 5 秒，等它彻底结束
+        await new Promise(function(res){ setTimeout(res, 5200) });
+        var after = window.DSHPet.motionParams('ketchup');
+        // 再手动清一次（等价于 resetEverything 里的 stopMotion）
+        window.DSHPet.resetEverything();
+        await new Promise(function(res){ setTimeout(res, 600) });
+        var afterReset = window.DSHPet.motionParams('ketchup');
+        var diff = function(a, b){
+          var n = 0;
+          for (var i = 0; i < a.length; i++) if (Math.abs((a[i]||0) - (b[i]||0)) > 0.02) n++;
+          return n;
+        };
+        return JSON.stringify({
+          total: before.total,
+          duringMoved: diff(before.values, during.values),
+          afterMoved: diff(before.values, after.values),
+          afterResetMoved: diff(before.values, afterReset.values),
+          sample: { before: before.values.slice(0, 4), during: during.values.slice(0, 4), after: after.values.slice(0, 4) },
+        });
+      })()`),
+    )
+    check(
+      '动作播放时参数确实被动画改了（说明在真的动）',
+      motionPose.duringMoved > 0,
+      JSON.stringify({duringMoved: motionPose.duringMoved, sample: motionPose.sample}),
+    )
+    check(
+      '动作演完，参数回到默认（蛋包饭不会永远挂着）',
+      motionPose.afterMoved === 0,
+      JSON.stringify({afterMoved: motionPose.afterMoved, sample: motionPose.sample}),
+    )
+    check(
+      '一键重置后参数也是干净的',
+      motionPose.afterResetMoved === 0,
+      JSON.stringify({afterResetMoved: motionPose.afterResetMoved}),
+    )
+
+    // 18.9) 面板往哪边开：靠左墙就往右开、靠右墙就往左开，而且不能一次左一次右
+    const panelSide = JSON.parse(
+      await evaluate(`(async function(){
+        var root = document.getElementById('dsh-live2d-pet');
+        var hud = document.querySelector('.dshp-hud');
+        var open = function(){ window.DSHPet.hud.show({flash:false}); };
+        var rect = function(){ var r = hud.getBoundingClientRect(); return {left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), w: Math.round(r.width)}; };
+        var out = {};
+
+        // ① 靠左墙：面板应该整体落在屏幕里，而且往右展开（面板左缘 ≈ 桌宠左缘）
+        window.DSHPet.resetEverything();
+        root.style.left = '10px'; root.style.top = '300px'; root.style.right = 'auto'; root.style.bottom = 'auto';
+        open();
+        await new Promise(function(res){ setTimeout(res, 420) });
+        out.atLeftWall = rect();
+        var rr1 = root.getBoundingClientRect();
+        out.leftWallOpensRight = out.atLeftWall.left >= rr1.left - 30;
+
+        // ② 靠右墙：往左展开（面板右缘 ≈ 桌宠右缘）
+        window.DSHPet.hud.hide();
+        root.style.left = (window.innerWidth - rr1.width - 10) + 'px';
+        await new Promise(function(res){ setTimeout(res, 260) });
+        open();
+        await new Promise(function(res){ setTimeout(res, 420) });
+        out.atRightWall = rect();
+        var rr2 = root.getBoundingClientRect();
+        out.rightWallOpensLeft = out.atRightWall.right <= rr2.right + 30;
+
+        // ③ 连开关三次，位置必须完全一样（不能一次左一次右）
+        var seen = [];
+        for (var i = 0; i < 3; i++) {
+          window.DSHPet.hud.hide();
+          await new Promise(function(res){ setTimeout(res, 260) });
+          open();
+          await new Promise(function(res){ setTimeout(res, 420) });
+          var r = rect();
+          seen.push(r.left + ',' + r.right);
+        }
+        out.repeat = seen;
+        out.stableRepeat = seen[0] === seen[1] && seen[1] === seen[2];
+        out.insideViewport =
+          out.atLeftWall.left >= 0 && out.atLeftWall.right <= window.innerWidth &&
+          out.atRightWall.left >= 0 && out.atRightWall.right <= window.innerWidth;
+        window.DSHPet.hud.hide();
+        window.DSHPet.resetEverything();
+        return JSON.stringify(out);
+      })()`),
+    )
+    check('靠左墙时面板往右开（面板左缘贴着桌宠）', panelSide.leftWallOpensRight === true, JSON.stringify(panelSide.atLeftWall))
+    check('靠右墙时面板往左开（面板右缘贴着桌宠）', panelSide.rightWallOpensLeft === true, JSON.stringify(panelSide.atRightWall))
+    check('面板整体都在屏幕里（靠墙也不会卡进墙里）', panelSide.insideViewport === true, JSON.stringify({left: panelSide.atLeftWall, right: panelSide.atRightWall}))
+    check('连开三次位置完全一致（不会再一次左一次右）', panelSide.stableRepeat === true, JSON.stringify(panelSide.repeat))
+
+    // 说话按钮：点一次开、再点一次关
+    const talkToggle = JSON.parse(
+      await evaluate(`(async function(){
+        window.DSHPet.resetEverything();
+        await new Promise(function(res){ setTimeout(res, 300) });
+        var btn = document.querySelector('.dshp-dock').children[0];
+        var on = function(){ return !!document.querySelector('.dshp-composer.dshp-on'); };
+        var out = {};
+        btn.click(); await new Promise(function(res){ setTimeout(res, 300) }); out.afterFirst = on();
+        btn.click(); await new Promise(function(res){ setTimeout(res, 300) }); out.afterSecond = on();
+        btn.click(); await new Promise(function(res){ setTimeout(res, 300) }); out.afterThird = on();
+        if (on()) btn.click();
+        return JSON.stringify(out);
+      })()`),
+    )
+    check('「说话」按钮是开关：点一次开、再点一次关', talkToggle.afterFirst === true && talkToggle.afterSecond === false && talkToggle.afterThird === true, JSON.stringify(talkToggle))
+
     // 19) 拖放规则（主人新定的）：只吸左右墙，竖直位置随我调，底部永远不吸
     const innerHeightHint = await evaluate('window.innerHeight')
     const dragTo = (txPct, tyPct) => `(async function(){

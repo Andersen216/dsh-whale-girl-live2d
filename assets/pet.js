@@ -548,7 +548,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   filter:drop-shadow(0 10px 20px rgba(0,0,0,.24))}
 .dshp-stage canvas{display:block;pointer-events:none}
 .dshp-bubble{position:absolute;left:50%;bottom:100%;
-  transform:translate(calc(-50% + var(--dshp-shift,0px)),6px) scale(.96);
+  transform:translate(calc(-50% + var(--dshp-shift,0px)),calc(6px + var(--dshp-shift-y,0px))) scale(.96);
   margin-bottom:calc(10px * var(--dshp-s));min-width:calc(110px * var(--dshp-s));
   max-width:min(calc(300px * var(--dshp-s)),70vw);pointer-events:auto;
   background:var(--dshp-bg);color:var(--dshp-fg);border:1px solid var(--dshp-line);
@@ -558,7 +558,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   font-size:calc(12.5px * var(--dshp-s));line-height:1.55;opacity:0;visibility:hidden;
   transition:opacity .18s ease,transform .18s ease;overflow-wrap:anywhere;word-break:break-word}
 .dshp-bubble.dshp-on{opacity:1;visibility:visible;
-  transform:translate(calc(-50% + var(--dshp-shift,0px)),0) scale(1)}
+  transform:translate(calc(-50% + var(--dshp-shift,0px)),var(--dshp-shift-y,0px)) scale(1)}
 .dshp-bubble:after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-6px;
   width:12px;height:12px;background:var(--dshp-bg);border-right:1px solid var(--dshp-line);
   border-bottom:1px solid var(--dshp-line);transform:rotate(45deg);border-radius:0 0 3px 0}
@@ -1109,12 +1109,49 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (!device.out) stopMotion()
   }
 
+  /**
+   * 把所有「动作会写的参数」复位到模型默认值，并重存一次框架的参数快照。
+   *
+   * 为什么必须手动做（踩了很久才查明白）：pixi-live2d-display 每帧的顺序是
+   *     动作写入 → saveParameters() 存快照 → 眨眼/视线/呼吸/物理 → beforeModelUpdate(我们的 rig)
+   *     → coreModel.update() → loadParameters() 把快照装回来
+   * 也就是说**快照是在动作写入之后存的**。动作一旦停下，快照里留的就是它最后一帧的姿势，
+   * 而 loadParameters() 每帧都会把这份姿势装回来 —— 表现就是主人报的
+   * 「蛋包饭点过以后永远挂在桌上、手机收不回去、表情也回不去，连一键重置都没用」。
+   * 所以停动作时要做两件事：① 把这些参数设回默认值 ② 重新 save 一次，把快照换成默认姿势。
+   */
+  function clearMotionPose() {
+    if (!coreModel || !manifest) return 0
+    const ids = new Set()
+    for (const meta of Object.values(manifest.motions || {})) {
+      for (const id of meta.params || []) ids.add(id)
+    }
+    let n = 0
+    for (const id of ids) {
+      try {
+        let def = 0
+        if (typeof coreModel.getParameterDefaultValue === 'function') {
+          const d = coreModel.getParameterDefaultValue(id)
+          if (typeof d === 'number' && Number.isFinite(d)) def = d
+        }
+        if (typeof coreModel.setParameterValueById === 'function') coreModel.setParameterValueById(id, def)
+        n++
+      } catch (e) {}
+    }
+    try {
+      if (typeof coreModel.saveParameters === 'function') coreModel.saveParameters()
+    } catch (e) {}
+    return n
+  }
+
   /** 停掉所有正在播的动作，让模型回到默认姿势。 */
   function stopMotion() {
     try {
       const mm = model && model.internalModel && model.internalModel.motionManager
       if (mm && typeof mm.stopAllMotions === 'function') mm.stopAllMotions()
     } catch (e) {}
+    // 光停动作不够：还得把「动作留下的姿势」从参数快照里清掉，否则它会永远挂着
+    clearMotionPose()
   }
 
   /** 一次性动作：到点自己回到常驻待机（动作也是一次只能一个）。 */
@@ -1300,38 +1337,46 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    * 左右展开的，于是右边那一截（包括关闭按钮和滑块的右半段）直接跑到屏幕外，
    * 点都点不到。这里量一下真实位置，用一个横向偏移把它推回来。
    */
-  function clampPanels() {
+  /**
+   * 面板往哪边展开 —— **纯计算，不「量了再挪」**。
+   *
+   * 主人报的问题：「弹窗一次往左一次往右，靠墙那次还会卡进墙里一半」。
+   * 根因是旧写法：先把位移清零、量面板位置、再据此设位移，而位移本身带过渡动画，
+   * 量到动画中间态就会一次算左一次算右，来回翻。
+   * 现在只看一件事：桌宠在屏幕的左半边还是右半边 ——
+   *   · 在左半边（左边是墙）→ 面板往**右**开
+   *   · 在右半边（右边是墙）→ 面板往**左**开
+   * 然后兜底夹进视口，保证整个面板（含右上角的 ×）都在屏幕里。
+   */
+  function placePanel(panel) {
+    if (!panel) return
     const vw = window.innerWidth
-    const vh = window.innerHeight
-    const pad = 8
-    // HUD 也要夹进来：它比菜单宽，蹲在右下角时右半边会被屏幕切掉
-    for (const panel of [
-      ui && ui.menu && ui.menu.el,
-      ui && ui.composer && ui.composer.el,
-      ui && ui.hud && ui.hud.el,
-    ]) {
-      if (!panel) continue
-      panel.style.setProperty('--dshp-shift', '0px')
-      if (!panel.classList.contains('dshp-on')) continue
-      const r = panel.getBoundingClientRect()
-      let dx = 0
-      let dy = 0
-      if (r.left < pad) dx = pad - r.left
-      else if (r.right > vw - pad) dx = vw - pad - r.right
-      // 纵向：桌宠被拖到屏幕顶端时，面板会伸到屏幕外面去
-      if (r.top < pad) dy = pad - r.top
-      panel.style.setProperty('--dshp-shift', Math.round(dx) + 'px')
-      panel.style.setProperty('--dshp-shift-y', Math.round(dy) + 'px')
-    }
-    if (ui && ui.bubble && ui.bubble.el) {
-      const b = ui.bubble.el
-      b.style.setProperty('--dshp-shift', '0px')
-      const r = b.getBoundingClientRect()
-      let dx = 0
-      if (r.left < pad) dx = pad - r.left
-      else if (r.right > vw - pad) dx = vw - pad - r.right
-      b.style.setProperty('--dshp-shift', Math.round(dx) + 'px')
-    }
+    const pad = 10
+    panel.style.setProperty('--dshp-shift', '0px')
+    if (!panel.classList.contains('dshp-on')) return
+    const w = panel.getBoundingClientRect().width || 0
+    if (!w) return
+    const r = ui.root.getBoundingClientRect()
+    const center = r.left + r.width / 2
+    const onLeftHalf = center < vw / 2
+    // 面板基准是「以桌宠中心居中」（left:50% + translateX(-50%)），所以位移 = 想要的位置 - 居中位置
+    let shift = onLeftHalf
+      ? r.left + w / 2 - center // 往右开：面板左边缘对齐桌宠左边
+      : r.right - w / 2 - center // 往左开：面板右边缘对齐桌宠右边
+    const left = center + shift - w / 2
+    if (left < pad) shift += pad - left
+    else if (left + w > vw - pad) shift -= left + w - (vw - pad)
+    panel.style.setProperty('--dshp-shift', Math.round(shift) + 'px')
+    // 纵向兜底：桌宠被拖到屏幕顶端时，面板别伸到屏幕外面去
+    const top = panel.getBoundingClientRect().top
+    panel.style.setProperty('--dshp-shift-y', top < pad ? Math.round(pad - top) + 'px' : '0px')
+  }
+
+  function clampPanels() {
+    placePanel(ui && ui.menu && ui.menu.el)
+    placePanel(ui && ui.composer && ui.composer.el)
+    placePanel(ui && ui.hud && ui.hud.el)
+    placePanel(ui && ui.bubble && ui.bubble.el)
   }
 
   function fitModel(explicitHeight) {
@@ -3127,7 +3172,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       })
       u.menu.tabs.appendChild(b)
     }
-    u.dock.children[0].addEventListener('click', () => openMenu('talk'))
+    // 主人要求：说话按钮点一次开、再点一次关（以前再点只会重新打开，像关不掉）
+    u.dock.children[0].addEventListener('click', () => {
+      if (u.composer.el.classList.contains('dshp-on')) closePanels()
+      else openMenu('talk')
+    })
     u.dock.children[1].addEventListener('click', () => {
       if (u.menu.el.classList.contains('dshp-on')) closePanels()
       else openMenu('menu')
@@ -3891,6 +3940,32 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     },
     /** 诊断用：直接演一个一次性动作。 */
     playAction: (key) => playAction(key),
+    /** 诊断用：某个动作会写哪些参数 / 这些参数当前的值（验证「动作停了姿势有没有清掉」）。 */
+    motionParams(group) {
+      const meta = (manifest && manifest.motions && manifest.motions[group]) || null
+      const ids = meta ? meta.params || [] : []
+      const read = (id) => {
+        try {
+          return typeof coreModel.getParameterValueById === 'function'
+            ? +coreModel.getParameterValueById(id).toFixed(4)
+            : null
+        } catch (e) {
+          return null
+        }
+      }
+      const def = (id) => {
+        try {
+          return typeof coreModel.getParameterDefaultValue === 'function'
+            ? +coreModel.getParameterDefaultValue(id).toFixed(4)
+            : null
+        } catch (e) {
+          return null
+        }
+      }
+      return { group, ids: ids.slice(0, 8), total: ids.length, values: ids.map(read), defaults: ids.map(def) }
+    },
+    /** 诊断用：主动清一次动作姿势（测试与 /control 都能用）。 */
+    clearMotionPose: () => clearMotionPose(),
     /** 诊断用：HUD（余额/计价面板）状态与当前显示的文字。 */
     hud: {
       open: () => hud.open,
