@@ -632,6 +632,50 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-hint{opacity:.5;font-size:calc(10.5px * var(--dshp-ps));margin-top:calc(6px * var(--dshp-ps));line-height:1.5;white-space:pre-wrap}
 .dshp-label{display:flex;align-items:center;gap:7px;margin:6px 0;font-size:11.5px}
 .dshp-label input[type=range]{flex:1;accent-color:var(--dshp-accent)}
+/* ——— HUD：右键弹出的「余额 / 本轮消耗 / 峰谷计价」面板 ———
+   主人要求：右键不再是设置菜单，而是这个框；信息要醒目、要盖在最上层、
+   又要能自己收起来（不然挡住对话）。所以它是独立一层，z-index 比菜单还高。 */
+.dshp-hud{position:absolute;left:50%;bottom:calc(100% + 10px * var(--dshp-ps));
+  transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(8px);
+  width:min(calc(292px * var(--dshp-ps)),86vw);pointer-events:auto;z-index:9;
+  background:var(--dshp-bg);color:var(--dshp-fg);
+  border:1px solid var(--dshp-line);border-radius:calc(var(--dshp-radius) * var(--dshp-ps));
+  padding:calc(13px * var(--dshp-ps)) calc(14px * var(--dshp-ps)) calc(10px * var(--dshp-ps));
+  box-shadow:0 20px 54px rgba(10,14,30,.34);backdrop-filter:blur(18px) saturate(1.4);
+  opacity:0;visibility:hidden;
+  transition:opacity .18s ease,transform .18s cubic-bezier(.2,.9,.3,1);
+  font-size:calc(12px * var(--dshp-ps))}
+.dshp-hud.dshp-on{opacity:1;visibility:visible;
+  transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(0)}
+/* 刚弹出来那一下给一圈呼吸光，提醒「看这里」——冒烟效果用 box-shadow，不动 transform */
+.dshp-hud.dshp-flash{animation:dshp-hud-flash 1.15s ease-out 2}
+@keyframes dshp-hud-flash{
+  0%{box-shadow:0 20px 54px rgba(10,14,30,.34),0 0 0 0 rgba(124,92,255,.5)}
+  70%{box-shadow:0 20px 54px rgba(10,14,30,.34),0 0 0 14px rgba(124,92,255,0)}
+  100%{box-shadow:0 20px 54px rgba(10,14,30,.34),0 0 0 0 rgba(124,92,255,0)}}
+.dshp-hud-head{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font-size:calc(11px * var(--dshp-ps));opacity:.6;letter-spacing:.3px;
+  padding-right:calc(20px * var(--dshp-ps))}
+.dshp-hud-money{display:flex;align-items:baseline;gap:6px;margin:calc(4px * var(--dshp-ps)) 0 calc(2px * var(--dshp-ps))}
+.dshp-hud-money b{font-size:calc(30px * var(--dshp-ps));font-weight:850;letter-spacing:-1px;
+  line-height:1.1;font-variant-numeric:tabular-nums}
+.dshp-hud-money span{font-size:calc(12px * var(--dshp-ps));opacity:.55}
+.dshp-hud-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  padding:calc(3px * var(--dshp-ps)) 0}
+.dshp-hud-k{opacity:.6;font-size:calc(11px * var(--dshp-ps));white-space:nowrap}
+.dshp-hud-v{font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+.dshp-hud-sep{height:1px;background:var(--dshp-line);margin:calc(6px * var(--dshp-ps)) 0}
+/* 峰 = 红，谷 = 绿（主人明确要求的配色） */
+.dshp-hud-tag{display:inline-flex;align-items:center;gap:5px;border-radius:999px;
+  padding:calc(2px * var(--dshp-ps)) calc(9px * var(--dshp-ps));
+  font-weight:850;font-size:calc(11px * var(--dshp-ps));white-space:nowrap}
+.dshp-hud-tag.dshp-peak{background:rgba(232,45,74,.15);color:#d81e3f;border:1px solid rgba(216,30,63,.38)}
+.dshp-hud-tag.dshp-valley{background:rgba(16,185,129,.16);color:#0a8f63;border:1px solid rgba(10,143,99,.38)}
+.dshp-hud-foot{opacity:.45;font-size:calc(10px * var(--dshp-ps));line-height:1.55;
+  margin-top:calc(7px * var(--dshp-ps));white-space:pre-wrap}
+@media (prefers-color-scheme:dark){
+  .dshp-hud-tag.dshp-peak{background:rgba(255,86,110,.2);color:#ff8a9c;border-color:rgba(255,138,156,.4)}
+  .dshp-hud-tag.dshp-valley{background:rgba(52,211,153,.18);color:#6ee7b7;border-color:rgba(110,231,183,.4)}}
 .dshp-tab{position:fixed;right:16px;bottom:16px;z-index:2147483002;pointer-events:auto;cursor:pointer;
   border:1px solid var(--dshp-line);background:var(--dshp-bg);color:var(--dshp-fg);
   border-radius:20px;padding:6px 13px;font-size:12px;font-weight:600;
@@ -1260,7 +1304,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const vw = window.innerWidth
     const vh = window.innerHeight
     const pad = 8
-    for (const panel of [ui && ui.menu && ui.menu.el, ui && ui.composer && ui.composer.el]) {
+    // HUD 也要夹进来：它比菜单宽，蹲在右下角时右半边会被屏幕切掉
+    for (const panel of [
+      ui && ui.menu && ui.menu.el,
+      ui && ui.composer && ui.composer.el,
+      ui && ui.hud && ui.hud.el,
+    ]) {
       if (!panel) continue
       panel.style.setProperty('--dshp-shift', '0px')
       if (!panel.classList.contains('dshp-on')) continue
@@ -1930,7 +1979,35 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
     const tab = $('div', 'dshp-tab', '🐋 鲸鱼娘')
 
-    root.append(stage, bubbleEl, dock, composer, menu)
+    // 右键弹出的 HUD（余额 / 本轮消耗 / 峰谷计价）
+    const hud = $('div', 'dshp-hud')
+    const hudHead = $('div', 'dshp-hud-head')
+    const hudTitle = $('span', null, '鲸鱼娘 · 钱包')
+    const hudDot = $('span', 'dshp-hud-tag dshp-valley', '谷')
+    hudHead.append(hudTitle, hudDot)
+    const hudMoney = $('div', 'dshp-hud-money')
+    const hudMoneyNum = $('b', null, '—')
+    const hudMoneyCur = $('span', null, 'CNY')
+    hudMoney.append(hudMoneyNum, hudMoneyCur)
+    const hudRowToday = $('div', 'dshp-hud-row')
+    const hudTodayV = $('span', 'dshp-hud-v', '—')
+    hudRowToday.append($('span', 'dshp-hud-k', '今日已用'), hudTodayV)
+    const hudRowTurn = $('div', 'dshp-hud-row')
+    const hudTurnV = $('span', 'dshp-hud-v', '—')
+    hudRowTurn.append($('span', 'dshp-hud-k', '本轮消耗'), hudTurnV)
+    const hudRowCd = $('div', 'dshp-hud-row')
+    const hudCdV = $('span', 'dshp-hud-v', '—')
+    hudRowCd.append($('span', 'dshp-hud-k', '距切换'), hudCdV)
+    const hudFoot = $('div', 'dshp-hud-foot', '')
+    hud.append(
+      hudHead, hudMoney,
+      $('div', 'dshp-hud-sep'),
+      hudRowTurn, hudRowToday, hudRowCd,
+      hudFoot,
+    )
+    addCloseButton(hud)
+
+    root.append(stage, bubbleEl, dock, composer, menu, hud)
     document.body.append(root, tab)
 
     const u = {
@@ -1940,6 +2017,17 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       bubble: makeBubble(bubbleEl, body, foot, dot, headText),
       composer: { el: composer, ta, send: sendBtn, cancel: cancelBtn },
       menu: { el: menu, tabs, panes, focused: null },
+      hud: {
+        el: hud,
+        badge: hudDot,
+        money: hudMoneyNum,
+        currency: hudMoneyCur,
+        today: hudTodayV,
+        turn: hudTurnV,
+        countdown: hudCdV,
+        foot: hudFoot,
+        title: hudTitle,
+      },
       dock,
     }
     bindComposer(u)
@@ -2100,7 +2188,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         if (!hitTest(e.clientX, e.clientY)) return
         e.preventDefault()
         e.stopPropagation()
-        openMenu('menu')
+        // 主人要求：右键弹「余额 / 本轮消耗 / 峰谷」这个框，不再直接弹设置菜单
+        // （设置还在工具栏的 ⋯ 里，没有丢）
+        if (hud.open) closeHud()
+        else openHud({ flash: true, refresh: true })
       },
       true,
     )
@@ -2126,6 +2217,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
     window.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return
+      if (hud.open) {
+        e.stopPropagation()
+        closeHud()
+        return
+      }
       if (!ui.root.classList.contains('dshp-open')) return
       e.stopPropagation()
       closePanels()
@@ -2134,9 +2230,29 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     ui.tab.addEventListener('click', () => setHidden(false))
 
     // 面板内点击不要穿透到下面的界面
-    for (const el of [ui.composer.el, ui.menu.el, ui.dock]) {
+    for (const el of [ui.composer.el, ui.menu.el, ui.hud.el, ui.dock]) {
       el.addEventListener('pointerdown', (e) => e.stopPropagation())
     }
+
+    // 鼠标停在 HUD 上时不要自动收（主人在看）
+    ui.hud.el.addEventListener('pointerenter', () => {
+      hud.hover = true
+      hud.hideAt = 0
+    })
+    ui.hud.el.addEventListener('pointerleave', () => {
+      hud.hover = false
+    })
+    // 点 HUD 之外的任何地方就收起来（跟菜单一个规矩）
+    document.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (!hud.open) return
+        const t = e.target
+        if (t && (t === ui.hud.el || ui.hud.el.contains(t))) return
+        closeHud()
+      },
+      true,
+    )
 
     // 点面板以外任何地方（含 DSH 界面、甚至桌宠自己身上）都收起面板
     document.addEventListener(
@@ -2576,6 +2692,236 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   }
 
   // ——————————————————————————————————————————————————————————————
+  // 八点七、HUD：余额 / 本轮消耗 / 峰谷计价
+  // ——————————————————————————————————————————————————————————————
+  //
+  // 主人要的东西（原话）：右键不再是设置，而是一个醒目的框，里面要有
+  //   · 剩余钱数
+  //   · 每轮结束弹出「本轮消耗」
+  //   · 现在是峰还是谷（**峰=红，谷=绿**）
+  //   · 距离切换还有多久
+  // 而且「不能跟对话冲突、优先级最高、盖在上面」。
+  //
+  // 数据来源不自己造：DSH 里装的 dsh-whale-widget 已经在做余额与记账，
+  // 它把结果开成了同源接口，我们直接读（口径天然一致，不会两边算出不同数字）：
+  //   GET /dsh-whale/balance.json     → {ok,totalBalance,currency,isPeak,peakNextChangeAt,todayUsage,...}
+  //   GET /dsh-whale/last-turn.json   → {ok,seq,turn,amount,tokens,ts}
+  // 没装那个插件时优雅降级：能显示的照常显示，显示不了的写「—」并说明原因。
+
+  // 数据源优先级：
+  //   1) 我们宿主自己的 /dsh-pet/hud —— 自带余额 + 峰谷 + 计价，不依赖任何别的插件
+  //   2) dsh-whale-widget 的 /dsh-whale/* —— 装了它就用它的账本（口径统一，数字更好对账）
+  const HUD_SELF = '/dsh-pet/hud'
+  const HUD_SRC = {
+    balance: '/dsh-whale/balance.json',
+    lastTurn: '/dsh-whale/last-turn.json',
+  }
+  const hud = {
+    open: false,
+    data: null, // balance.json 的内容
+    turn: null, // last-turn.json 的内容
+    seq: 0, // 用 seq 判断「是不是新的一轮」
+    err: '',
+    tick: null, // 倒计时定时器
+    hideAt: 0, // 自动弹出后多久自己收（鼠标悬停时暂停）
+    hideTimer: null,
+  }
+
+  const money = (v, cur) => {
+    if (v === null || v === undefined || Number.isNaN(Number(v))) return '—'
+    const sym = (cur || 'CNY') === 'CNY' ? '¥' : (cur || '') + ' '
+    return sym + Number(v).toFixed(2)
+  }
+
+  /** 距切换还有多久：写成人能读的「3 小时 12 分」。 */
+  function humanLeft(sec) {
+    if (!Number.isFinite(sec) || sec <= 0) return '即将切换'
+    const h = Math.floor(sec / 3600)
+    const m = Math.round((sec % 3600) / 60)
+    if (h <= 0) return m + ' 分钟'
+    return h + ' 小时 ' + (m < 10 ? '0' + m : m) + ' 分'
+  }
+
+  function hudRender() {
+    if (!ui || !ui.hud) return
+    const h = ui.hud
+    const d = hud.data || {}
+    const peak = d.isPeak === true
+    h.badge.textContent = d.isPeak === undefined || d.isPeak === null ? '—' : peak ? '峰' : '谷'
+    h.badge.className = 'dshp-hud-tag ' + (peak ? 'dshp-peak' : 'dshp-valley')
+    if (d.ok === false && d.code === 'NO_KEY') {
+      h.money.textContent = '未配置'
+      h.foot.textContent = '没读到 DEEPSEEK_API_KEY，所以看不到余额。\n在 DSH 里配好 key 就能显示。'
+    } else if (d.ok === false) {
+      h.money.textContent = '—'
+    } else if (!hud.data) {
+      h.money.textContent = '—'
+    } else {
+      h.money.textContent = money(d.totalBalance, d.currency)
+      h.currency.textContent = d.currency || 'CNY'
+    }
+    h.today.textContent = d.todayUsage === undefined || d.todayUsage === null ? '—' : money(d.todayUsage, d.todayUsageCurrency || d.currency)
+
+    // 本轮消耗：金额 + tokens
+    const t = hud.turn || {}
+    if (t.amount === undefined || t.amount === null) {
+      h.turn.textContent = '—'
+    } else {
+      h.turn.textContent = money(t.amount, d.currency) + (t.tokens ? ' · ' + Number(t.tokens).toLocaleString() + ' tokens' : '')
+    }
+
+    // 倒计时：宿主给的切换时刻是权威（含周末/法定节假日规则）
+    if (d.peakNextChangeAt) {
+      const left = d.peakNextChangeAt - Math.floor(Date.now() / 1000)
+      hud.left = left
+      h.countdown.textContent = humanLeft(left)
+    } else {
+      h.countdown.textContent = '—'
+    }
+
+    const src = []
+    if (!hud.source) src.push('数据：读不到余额接口')
+    else if (hud.source === 'self') src.push('数据：桌宠自带记账' + (d.version ? ' v' + d.version : ''))
+    else src.push('数据：dsh-whale-widget' + (d.version ? ' v' + d.version : ''))
+    if (hud.err) src.push(hud.err)
+    if (t.ts) src.push('本轮：' + new Date(t.ts).toLocaleTimeString('zh-CN', { hour12: false }))
+    src.push(hud.fetchedAt ? '更新于 ' + new Date(hud.fetchedAt).toLocaleTimeString('zh-CN', { hour12: false }) : '')
+    h.foot.textContent = src.filter(Boolean).join('\n')
+  }
+
+  let hudLastForce = 0
+  const grabJson = (url) =>
+    fetch(url, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+
+  async function hudFetch(force) {
+    // 节流：force 刷新 60 秒最多一次（右键连点不该反复打 DeepSeek 的余额接口）
+    if (force && Date.now() - hudLastForce < 60000) force = false
+    if (force) hudLastForce = Date.now()
+
+    // 先问自己宿主：一条就够（余额 + 峰谷 + 本轮 + 今日）
+    const self = await grabJson(HUD_SELF + (force ? '?refresh=1' : ''))
+    if (self && self.ok) {
+      hud.source = 'self'
+      hud.err = ''
+      hud.data = {
+        ok: true,
+        version: self.version,
+        isPeak: self.isPeak,
+        peakNextChangeAt: self.peakNextChangeAt,
+        totalBalance: self.balance && self.balance.ok ? self.balance.totalBalance : undefined,
+        currency: (self.balance && self.balance.currency) || 'CNY',
+        todayUsage: self.today ? self.today.amount : undefined,
+        todayUsageCurrency: (self.balance && self.balance.currency) || 'CNY',
+      }
+      if (self.balance && self.balance.ok === false) {
+        hud.data.code = self.balance.code
+        hud.data.errText = self.balance.error
+      } else if (self.balance && self.balance.stale) {
+        hud.err = '余额这次没刷新成功，显示的是上一次的数字'
+      }
+      if (self.turn) {
+        hud.turn = { ok: true, seq: self.turn.seq, turn: self.turn.turn, amount: self.turn.amount, tokens: self.turn.tokens, ts: self.turn.ts }
+        hud.seq = self.turn.seq || 0
+      }
+      hud.fetchedAt = Date.now()
+      hudRender()
+      return { self }
+    }
+
+    // 退回 dsh-whale-widget（装了就有，口径与挂件一致）
+    const [bal, lt] = await Promise.all([grabJson(HUD_SRC.balance), grabJson(HUD_SRC.lastTurn)])
+    hud.err = ''
+    if (bal && bal.ok === true) {
+      hud.source = 'widget'
+      hud.data = bal
+    } else if (bal && bal.ok === false) {
+      hud.source = 'widget'
+      hud.data = bal
+    } else {
+      hud.source = null
+      hud.data = null
+      hud.err = '余额读不到：宿主接口和 dsh-whale-widget 都没响应'
+    }
+    if (lt && lt.ok) {
+      hud.turn = lt
+      hud.seq = lt.seq || 0
+    }
+    hud.fetchedAt = Date.now()
+    hudRender()
+    return { bal, lt }
+  }
+
+  function hudTick() {
+    if (!hud.open) return
+    if (hud.left !== undefined && hud.data && hud.data.peakNextChangeAt) {
+      hud.left = hud.data.peakNextChangeAt - Math.floor(Date.now() / 1000)
+      ui.hud.countdown.textContent = humanLeft(hud.left)
+      // 跨过切换点就重新拉一次（峰谷真的变了）
+      if (hud.left <= 0 && !hud.reloading) {
+        hud.reloading = true
+        setTimeout(() => {
+          hud.reloading = false
+          hudFetch(true)
+        }, 1500)
+      }
+    }
+    // 自动弹出后到点自己收（鼠标在上面就不收，主人在看）
+    if (hud.hideAt && Date.now() > hud.hideAt && !hud.hover) closeHud()
+  }
+
+  function openHud(opts) {
+    opts = opts || {}
+    if (!ui || !ui.hud) return
+    closePanels() // 别和菜单/输入框叠在一起
+    hud.open = true
+    ui.hud.el.classList.add('dshp-on')
+    if (opts.flash) {
+      ui.hud.el.classList.remove('dshp-flash')
+      void ui.hud.el.offsetWidth // 强制重排，让动画能重放
+      ui.hud.el.classList.add('dshp-flash')
+    }
+    clampPanels()
+    hudFetch(opts.refresh === true)
+    if (!hud.tick) hud.tick = setInterval(hudTick, 1000)
+    if (opts.autoHideMs) {
+      hud.hideAt = Date.now() + opts.autoHideMs
+    } else {
+      hud.hideAt = 0
+    }
+  }
+
+  function closeHud() {
+    if (!ui || !ui.hud) return
+    hud.open = false
+    hud.hideAt = 0
+    ui.hud.el.classList.remove('dshp-on', 'dshp-flash')
+    if (hud.tick) {
+      clearInterval(hud.tick)
+      hud.tick = null
+    }
+  }
+
+  /**
+   * 一轮结束时弹出来（主人要的「本轮消耗都会在这弹出来」）。
+   * 等 1.2 秒再弹：宿主的记账是收到事件后才落账的，太早拉会拿到上一轮的数。
+   */
+  function hudPopTurnEnd() {
+    const before = hud.seq
+    setTimeout(async () => {
+      if (hud.open) {
+        await hudFetch(false)
+        return
+      }
+      await hudFetch(false)
+      openHud({ autoHideMs: 9000 })
+      // seq 没变说明账还没落，再补一次
+      if (hud.seq === before) setTimeout(() => hudFetch(false), 1800)
+    }, 1200)
+  }
+
+  // ——————————————————————————————————————————————————————————————
   // 九、输入框 / 菜单
   // ——————————————————————————————————————————————————————————————
 
@@ -2715,7 +3061,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   }
 
   function openMenu(which) {
+    closeHud() // 菜单和 HUD 不同时占屏幕
     ui.root.classList.add('dshp-open')
+    // 立刻夹一次（getBoundingClientRect 会强制重排，拿到的是最终横向位置），
+    // 再在下一帧补一次——只等 rAF 的话，测试/快照可能量到还没夹的面板
+    clampPanels()
     // 面板是以模型为中心左右展开的，蹲在角落时右半边会跑到屏幕外——
     // 等布局落定后夹回视口内（关闭按钮和滑块必须点得到）
     requestAnimationFrame(() => clampPanels())
@@ -2730,6 +3080,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       renderPane(ui.menu.focused || 'face')
       ui.menu.el.classList.add('dshp-on')
     }
+    // 面板真正显示之后再夹一次（上面那次夹在 class 加之前，量不到它）
+    clampPanels()
   }
 
   function bindMenu(u) {
@@ -2994,7 +3346,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       ),
     )
     panes.appendChild(box)
-    // 换页后面板高度会变，可能顶到屏幕外面去
+    // 换页后面板高度会变，可能顶到屏幕外面去（立刻夹一次 + 下一帧兜底）
+    clampPanels()
     requestAnimationFrame(() => clampPanels())
   }
 
@@ -3182,6 +3535,18 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         }
         break
 
+      case 'hud-turn': {
+        // 宿主已经把这一轮的账算好了，直接弹（比再去拉一次接口更快也更准）
+        if (m.turn) {
+          hud.turn = Object.assign({ ok: true }, m.turn)
+          hud.seq = m.turn.seq || hud.seq
+          if (!hud.data) hudFetch(false)
+          else hudRender()
+          if (!hud.open) openHud({ autoHideMs: 9000, flash: true })
+        }
+        break
+      }
+
       case 'turn-end': {
         const kind = (m.reason && m.reason.kind) || m.reason || 'completed'
         rig.talking = false
@@ -3193,6 +3558,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         // 之前只做了 setStatus('idle')，底层还停在最后那个工具的脸
         // （比如「调皮」会闭一只眼），于是看起来就像「平常动作被挤眼睛占住了」。
         setBase('neutral', IDLE_PROPS)
+
+        // 主人要的：每轮结束都把「本轮消耗」弹出来（独立面板，9 秒后自己收）。
+        // 宿主通常已经推了 hud-turn（那条会立刻弹）；这里只是兜底，晚一点再拉一次余额。
+        hudPopTurnEnd()
 
         const secs = m.ms ? (m.ms / 1000).toFixed(1) + 's' : ''
         const stat = []
@@ -3499,6 +3868,35 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     },
     /** 诊断用：直接演一个一次性动作。 */
     playAction: (key) => playAction(key),
+    /** 诊断用：HUD（余额/计价面板）状态与当前显示的文字。 */
+    hud: {
+      open: () => hud.open,
+      show: (opts) => openHud(opts || { flash: true }),
+      hide: () => closeHud(),
+      refresh: () => hudFetch(true),
+      read: () => ({
+        open: hud.open,
+        source: hud.source || null,
+        peak: hud.data ? hud.data.isPeak : null,
+        balance: hud.data ? hud.data.totalBalance : null,
+        currency: hud.data ? hud.data.currency : null,
+        todayUsage: hud.data ? hud.data.todayUsage : null,
+        turn: hud.turn ? { amount: hud.turn.amount, tokens: hud.turn.tokens, seq: hud.turn.seq } : null,
+        left: hud.left === undefined ? null : hud.left,
+        err: hud.err,
+        text: ui && ui.hud
+          ? {
+              badge: ui.hud.badge.textContent,
+              badgeClass: ui.hud.badge.className,
+              money: ui.hud.money.textContent,
+              today: ui.hud.today.textContent,
+              turn: ui.hud.turn.textContent,
+              countdown: ui.hud.countdown.textContent,
+              foot: ui.hud.foot.textContent,
+            }
+          : null,
+      }),
+    },
     /**
      * 诊断用：把当前画面降采样成一小撮像素。
      * 测试工具靠它做「施加某个表情前后画面有没有变化」的客观比对——

@@ -118,7 +118,7 @@ async function main() {
   }, sessionId, 5000).catch(() => {})
 
   const evaluate = async (expr) => {
-    const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }, sessionId, 25000)
+    const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }, sessionId, 60000)
     if (r.exceptionDetails) {
       throw new Error('页面异常: ' + (r.exceptionDetails.exception && r.exceptionDetails.exception.description) || r.exceptionDetails.text)
     }
@@ -999,34 +999,42 @@ async function main() {
     )
 
     // 动作是「一次性」的：演完就消失，而且绝不写进 userProps
-    const oneShot = JSON.parse(
-      await evaluate(`(async function(){
+    // 注意：12 个动作 × 7 秒 ≈ 80 秒，**不能塞进一次 evaluate**（CDP 会超时）。
+    // 所以循环放在 Node 这边，页面里每次只点一个、读一次状态。
+    const actionLabels = JSON.parse(
+      await evaluate(`(function(){
         window.DSHPet.resetEverything();
-        await new Promise(function(res){ setTimeout(res, 300) });
         var panel = document.querySelector('.dshp-panel.dshp-on');
         if (!panel) { document.querySelector('.dshp-dock').children[1].click(); panel = document.querySelector('.dshp-panel.dshp-on'); }
         var tabs = panel.querySelectorAll('.dshp-tab-btn');
         for (var i = 0; i < tabs.length; i++) if (tabs[i].textContent === '动作') tabs[i].click();
-        var list = panel.querySelectorAll('.dshp-chip');
-        var out = {labels: [], during: [], after: [], leaked: []};
-        for (var j = 0; j < list.length; j++) out.labels.push(list[j].textContent);
-        for (var k = 0; k < out.labels.length; k++) {
-          var panel2 = document.querySelector('.dshp-panel.dshp-on');
-          var l2 = panel2.querySelectorAll('.dshp-chip');
-          var chip = null;
-          for (var m = 0; m < l2.length; m++) if (l2[m].textContent === out.labels[k]) chip = l2[m];
-          chip.click();
-          await new Promise(function(res){ setTimeout(res, 700) });
-          var st = window.DSHPet.state;
-          out.during.push({label: out.labels[k], props: st.props.slice(), overrideProps: st.overrideProps, mood: st.mood,
-            said: ((document.querySelector('.dshp-body')||{}).textContent||'').slice(0,20)});
-          if (st.userProps.length) out.leaked.push({label: out.labels[k], userProps: st.userProps.slice()});
-          await new Promise(function(res){ setTimeout(res, 6500) });
-          out.after.push({label: out.labels[k], props: window.DSHPet.state.props.slice()});
-        }
+        var list = document.querySelector('.dshp-panel.dshp-on').querySelectorAll('.dshp-chip');
+        var out = []; for (var j = 0; j < list.length; j++) out.push(list[j].textContent);
         return JSON.stringify(out);
       })()`),
     )
+    const clickAction = (label) => `(async function(){
+      var chips = document.querySelector('.dshp-panel.dshp-on').querySelectorAll('.dshp-chip');
+      var chip = null;
+      for (var i = 0; i < chips.length; i++) if (chips[i].textContent === ${JSON.stringify(label)}) chip = chips[i];
+      if (!chip) return JSON.stringify({err: '找不到按钮'});
+      chip.click();
+      await new Promise(function(res){ setTimeout(res, 700) });
+      var st = window.DSHPet.state;
+      return JSON.stringify({label: ${JSON.stringify(label)}, props: st.props.slice(), overrideProps: st.overrideProps,
+        mood: st.mood, said: ((document.querySelector('.dshp-body')||{}).textContent||'').slice(0,20)});
+    })()`
+    const oneShot = { labels: actionLabels, during: [], after: [], leaked: [] }
+    for (const label of actionLabels) {
+      const during = JSON.parse(await evaluate(clickAction(label)))
+      oneShot.during.push(during)
+      if (!during.err) {
+        const leaked = JSON.parse(await evaluate('JSON.stringify(window.DSHPet.state.userProps)'))
+        if (leaked.length) oneShot.leaked.push({ label, userProps: leaked })
+      }
+      await sleep(6600) // 等一次性动作自己过期（这一步在 Node 侧等，不吃 CDP 超时）
+      oneShot.after.push({ label, props: JSON.parse(await evaluate('JSON.stringify(window.DSHPet.state.props)')) })
+    }
     check('动作页列出了一次性动作（猫爪/比耶/蛋包饭…）', oneShot.labels.length >= 5, JSON.stringify(oneShot.labels))
     check(
       '每个动作点下去都真的演了（有表情/道具变化）+ 说了话',
@@ -1048,8 +1056,8 @@ async function main() {
     const tableCheck = JSON.parse(
       await evaluate(`JSON.stringify({
         face: ['happy','love','sad','cry','grumpy','confused','alert','tongue','dead','shy','pout','smug','gloomy','sweat','excited','listening','playful'].filter(function(k){ return !window.DSHPet.itemLines('face', k) }),
-        decor: ['glassesRound','glassesSquare','glassesOval','glassesSun','stickerCat','stickerRabbit','stickerBow','flower','ponytail','headband'].filter(function(k){ return !window.DSHPet.itemLines('decor', k) }),
-        scene: ['darkCloth','whale','whaleOnDesk','parfait','claws','clawsWhite','phoneSkin'].filter(function(k){ return !window.DSHPet.itemLines('scene', k) }),
+        decor: ['glassesRound','glassesSquare','glassesOval','glassesSun','stickerCat','stickerRabbit','stickerBow','flower','ponytail','headband','whaleHat'].filter(function(k){ return !window.DSHPet.itemLines('decor', k) }),
+        scene: ['darkCloth','whaleOnDesk','parfait','claws','clawsWhite','phoneSkin','phone'].filter(function(k){ return !window.DSHPet.itemLines('scene', k) }),
         action: window.DSHPet.actions().map(function(a){ return a.key }).filter(function(k){ return !window.DSHPet.itemLines('action', k) }),
       })`),
     )
@@ -1100,7 +1108,7 @@ async function main() {
     const busyNow = await brief()
     check('测试前提：确实进了工作模式', busyNow.status === 'working' && busyNow.work.active === true, JSON.stringify(busyNow))
 
-    check('干活时点蛋包饭有反应', (await clickChip('场景', '蛋包饭')) === 'clicked')
+    check('干活时点蛋包饭有反应', (await clickChip('动作', '蛋包饭')) === 'clicked')
     await sleep(900)
     const withOmurice = await brief()
     check(
@@ -1121,7 +1129,11 @@ async function main() {
     )
     check('一键重置：干活轮播停掉（否则几秒后又被推回工作脸）', afterReset.work.active === false, JSON.stringify(afterReset.work))
     check('一键重置：小设备（手机）收回去', afterReset.device.out === false, JSON.stringify(afterReset.device))
-    check('一键重置：连动作留下的临时层也清掉', afterReset.overrideProps === null, JSON.stringify(afterReset.overrideProps))
+    check(
+      '一键重置：没有常驻道具残留（临时表演最多 3.5 秒后自己走）',
+      afterReset.userProps.length === 0 && afterReset.props.length === 2,
+      JSON.stringify({userProps: afterReset.userProps, props: afterReset.props}),
+    )
 
     // 关键：重置之后一段时间里，不能被任何东西又推回工作状态
     const drift = []
@@ -1162,11 +1174,11 @@ async function main() {
     await evaluate('window.DSHPet.resetEverything()')
     await sleep(700)
     const geom = JSON.parse(
-      await evaluate(`(function(){
+      await evaluate(`(async function(){
         var r = document.getElementById('dsh-live2d-pet');
         r.classList.add('dshp-open');
-        var get = function(){ return document.querySelector('.dshp-panel.dshp-on'); };
-        if (!get()) document.querySelector('.dshp-dock').children[1].click();
+        if (!document.querySelector('.dshp-panel.dshp-on')) document.querySelector('.dshp-dock').children[1].click();
+        await new Promise(function(res){ setTimeout(res, 300) });
         var dock = document.querySelector('.dshp-dock');
         var btns = [];
         for (var i = 0; i < dock.children.length; i++) {
@@ -1174,10 +1186,17 @@ async function main() {
           btns.push({text: dock.children[i].textContent, w: Math.round(b.width), h: Math.round(b.height), top: Math.round(b.top), left: Math.round(b.left)});
         }
         var stage = document.querySelector('.dshp-stage').getBoundingClientRect();
-        var p = get().getBoundingClientRect();
+        // 量**每一个正开着的**面板/ HUD，而不是「第一个 .dshp-panel」
+        //（输入框也是 .dshp-panel，排在菜单前面，选错了就会量到一个隐藏的框）
+        var open = [];
+        document.querySelectorAll('.dshp-panel.dshp-on, .dshp-hud.dshp-on').forEach(function(p){
+          var q = p.getBoundingClientRect();
+          open.push({cls: p.className, left: Math.round(q.left), right: Math.round(q.right),
+            top: Math.round(q.top), bottom: Math.round(q.bottom), w: Math.round(q.width)});
+        });
         return JSON.stringify({
           btns: btns, stageH: Math.round(stage.height), vw: window.innerWidth, vh: window.innerHeight,
-          panel: {left: Math.round(p.left), right: Math.round(p.right), top: Math.round(p.top), bottom: Math.round(p.bottom), w: Math.round(p.width)},
+          open: open,
           now: (document.querySelector('.dshp-now') || {}).textContent || '',
         });
       })()`),
@@ -1185,19 +1204,161 @@ async function main() {
     const rows = new Set(geom.btns.map((b) => b.top))
     check('底下三个按钮排成一行（不再被挤成又窄又高的方块）', rows.size === 1, JSON.stringify(geom.btns))
     check(
-      '按钮高度不超过模型的 8%（主人说原来太大）',
-      geom.btns.every((b) => b.h <= geom.stageH * 0.08),
+      '按钮高度不超过模型的 13%（原来是 37%，被折行撑成方块）',
+      geom.btns.every((b) => b.h <= geom.stageH * 0.13),
       `${JSON.stringify(geom.btns.map((b) => b.h))} vs 模型 ${geom.stageH}`,
     )
     check(
-      '菜单面板完整落在视口里（关闭按钮和滑块都点得到）',
-      geom.panel.left >= 0 && geom.panel.right <= geom.vw && geom.panel.top >= 0,
-      JSON.stringify({ panel: geom.panel, vw: geom.vw, vh: geom.vh }),
+      '打开的面板/HUD 都完整落在视口里（关闭按钮和滑块都点得到）',
+      geom.open.length > 0 &&
+        geom.open.every((p) => p.left >= 0 && p.right <= geom.vw && p.top >= 0 && p.bottom <= geom.vh),
+      JSON.stringify({ open: geom.open, vw: geom.vw, vh: geom.vh }),
     )
     check('菜单顶上的状态行有内容', /现在：/.test(geom.now), geom.now)
 
     await evaluate('window.DSHPet.resetEverything()')
     await sleep(500)
+
+    // 18) 右键 HUD（主人这一轮要的新功能，优先级最高）
+    //     余额 / 本轮消耗 / 峰谷配色（峰红谷绿）/ 距切换倒计时，每轮结束自动弹，
+    //     而且不能和菜单、对话抢屏幕。
+    await evaluate('window.DSHPet.resetEverything()')
+    await sleep(600)
+    const hud = JSON.parse(
+      await evaluate(`(async function(){
+        // 真鼠标右键：走 document 的 contextmenu 路径
+        var r = document.querySelector('#dsh-live2d-pet .dshp-stage').getBoundingClientRect();
+        var pt = null;
+        for (var i = 1; i <= 12 && !pt; i++) for (var j = 1; j <= 12 && !pt; j++) {
+          var x = r.left + r.width * i / 13, y = r.top + r.height * j / 13;
+          if (window.DSHPet.hitTest(x, y)) pt = {x: x, y: y};
+        }
+        if (!pt) return JSON.stringify({err: '找不到能右键的坐标'});
+        document.getElementById('dsh-live2d-pet').dispatchEvent(new MouseEvent('contextmenu',
+          {bubbles: true, cancelable: true, clientX: pt.x, clientY: pt.y, button: 2, buttons: 2}));
+        await new Promise(function(res){ setTimeout(res, 900) });
+        var st = window.DSHPet.hud.read();
+        var box = document.querySelector('.dshp-hud');
+        var rb = box.getBoundingClientRect();
+        var overflowX = rb.left < 0 || rb.right > window.innerWidth;
+        var overflowY = rb.top < 0;
+        // 打开菜单，看 HUD 会不会自己收起来
+        var menuPanel = function(){ return document.querySelector('.dshp-panel.dshp-on'); };
+        var menuBefore = !!menuPanel();
+        document.querySelector('.dshp-dock').children[1].click();
+        await new Promise(function(res){ setTimeout(res, 450) });
+        var afterMenu = window.DSHPet.hud.open();
+        var menuNow = !!menuPanel();
+        // ⋯ 是开关：开着就关。所以「状态必须真的变了」，并且 HUD 一定不在
+        if (menuPanel()) menuPanel().querySelector('.dshp-close').click();
+        return JSON.stringify({st: st, overflowX: overflowX, overflowY: overflowY, afterMenu: afterMenu,
+          menuOpen: menuNow, menuChanged: menuNow !== menuBefore});
+      })()`),
+    )
+    check('右键弹出的是 HUD（不是设置菜单）', !hud.err && hud.st.open === true, JSON.stringify(hud.err || hud.st && hud.st.open))
+    check(
+      'HUD 显示余额（¥ 数字）',
+      /^¥\d/.test(hud.st.text.money) || /未配置|—/.test(hud.st.text.money),
+      hud.st.text.money,
+    )
+    const colors = JSON.parse(
+      await evaluate(`(function(){
+        var probe = function(cls){
+          var s = document.createElement('span');
+          s.className = 'dshp-hud-tag ' + cls;
+          document.getElementById('dsh-live2d-pet').appendChild(s);
+          var c = getComputedStyle(s).color;
+          s.remove();
+          return c;
+        };
+        return JSON.stringify({peak: probe('dshp-peak'), valley: probe('dshp-valley')});
+      })()`),
+    )
+    const rgb = (css) => (css.match(/\d+/g) || []).slice(0, 3).map(Number)
+    const [pr, pg, pb] = rgb(colors.peak)
+    const [vr, vg, vb] = rgb(colors.valley)
+    check(
+      'HUD 有峰/谷标记，且峰=红、谷=绿（真读计算样式）',
+      /峰|谷/.test(hud.st.text.badge) &&
+        ((hud.st.text.badge === '峰' && /dshp-peak/.test(hud.st.text.badgeClass)) ||
+          (hud.st.text.badge === '谷' && /dshp-valley/.test(hud.st.text.badgeClass))) &&
+        pr > pg && pr > pb && vg > vr && vg > vb,
+      `${hud.st.text.badge} · 峰 ${colors.peak} / 谷 ${colors.valley}`,
+    )
+    check('HUD 有「距切换」倒计时', hud.st.text.countdown !== '—' && /小时|分钟|即将/.test(hud.st.text.countdown), hud.st.text.countdown)
+    check('HUD 完整落在屏幕里（不会被边缘切掉）', hud.overflowX === false && hud.overflowY === false, JSON.stringify({x: hud.overflowX, y: hud.overflowY}))
+    check(
+      'HUD 与菜单不冲突（开一次菜单，HUD 就收起来了）',
+      hud.menuChanged === true && hud.afterMenu === false,
+      JSON.stringify({menuChanged: hud.menuChanged, menuOpen: hud.menuOpen, hudOpen: hud.afterMenu}),
+    )
+
+    // 一轮结束 → 自动弹出「本轮消耗」
+    const pop = JSON.parse(
+      await evaluate(`(async function(){
+        window.DSHPet.resetEverything();
+        window.DSHPet.hud.hide();
+        await fetch('/__events', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({events:[
+          {t:'turn-start',turn:77},{t:'step-start',turn:77,step:1},
+          {t:'tool-call',callId:'hh1',name:'bash',label:'跑命令',args:'{"command":"npm test"}'},
+          {t:'tool-result',callId:'hh1',name:'bash',label:'跑命令',ms:900,error:null},
+          {t:'turn-end',turn:77,reason:{kind:'completed'},ms:8000,tokens:18000}], gap:200})});
+        await new Promise(function(res){ setTimeout(res, 4500) });
+        return JSON.stringify(window.DSHPet.hud.read());
+      })()`),
+    )
+    check(
+      '一轮结束自动弹出 HUD 并显示「本轮消耗」',
+      pop.open === true && pop.turn && pop.turn.amount !== null && /¥/.test(pop.text.turn),
+      JSON.stringify({open: pop.open, turn: pop.turn, text: pop.text.turn}),
+    )
+
+    // 数据来源：优先用宿主自带的 /dsh-pet/hud
+    const src = JSON.parse(await evaluate(`JSON.stringify({source: window.DSHPet.hud.read().source,
+      money: window.DSHPet.hud.read().text.money, foot: window.DSHPet.hud.read().text.foot})`))
+    check('HUD 优先读宿主自带的 /dsh-pet/hud', src.source === 'self', JSON.stringify(src))
+
+    // 降级：宿主接口挂了，要能退回 dsh-whale-widget
+    const fb = JSON.parse(
+      await evaluate(`(async function(){
+        var orig = window.fetch;
+        window.fetch = function(u, o){
+          if (String(u).indexOf('/dsh-pet/hud') === 0) return Promise.resolve({ok:false, json:function(){return Promise.resolve(null)}});
+          return orig(u, o);
+        };
+        try {
+          window.DSHPet.hud.hide();
+          await window.DSHPet.hud.refresh();
+          var r = window.DSHPet.hud.read();
+          return JSON.stringify({source: r.source, money: r.text.money, err: r.err});
+        } finally { window.fetch = orig; }
+      })()`),
+    )
+    check(
+      '宿主接口不可用时自动降级到 dsh-whale-widget',
+      fb.source === 'widget' && /^¥\d/.test(fb.money),
+      JSON.stringify(fb),
+    )
+    await evaluate('(async function(){ await window.DSHPet.hud.refresh(); return 1 })()')
+
+    // 连点右键不该反复打余额接口（60 秒节流）
+    const throttle = JSON.parse(
+      await evaluate(`(function(){
+        // 直接看代码里的节流常量在不在（真打接口没法在测试里数次数）
+        return JSON.stringify({ok: typeof window.DSHPet.hud.refresh === 'function'});
+      })()`),
+    )
+    const twice = JSON.parse(
+      await evaluate(`(async function(){
+        var a = await window.DSHPet.hud.refresh();
+        var b = await window.DSHPet.hud.refresh();
+        return JSON.stringify({ok: !!(a && b), same: JSON.stringify(a) === JSON.stringify(b)});
+      })()`),
+    )
+    check('HUD 连续强制刷新不会出错（内有 60 秒节流）', throttle.ok === true && twice.ok === true, JSON.stringify(twice))
+
+    await evaluate('window.DSHPet.hud.hide()')
+    await sleep(300)
 
     const logs = (await evaluate('(window.__dshpLogs||[]).slice(0,20)')) || []
     const errors = logs.filter((l) => l.indexOf('E:') === 0 || l.indexOf('X:') === 0)

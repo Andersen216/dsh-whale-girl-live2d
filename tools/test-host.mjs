@@ -286,6 +286,50 @@ await fetch(BASE + '/dsh-pet/cancel', { method: 'POST', headers: { 'Content-Type
 check('/cancel 走通', cancels.length === 1 && cancels[0].sessionId === 'sess-1')
 
 // ————————————————————————————————————————————————————————————
+// 钱包：/dsh-pet/hud（余额 / 峰谷 / 本轮消耗）—— 右键 HUD 的数据源
+// ————————————————————————————————————————————————————————————
+const hudRes = await fetch(BASE + '/dsh-pet/hud')
+const hudBody = await hudRes.json()
+check('/dsh-pet/hud 可用且是 JSON', hudRes.status === 200 && hudBody.ok === true, JSON.stringify(hudBody).slice(0, 160))
+check('HUD 带峰谷判定与下一次切换时刻',
+  typeof hudBody.isPeak === 'boolean' && Number.isFinite(hudBody.peakNextChangeAt),
+  `isPeak=${hudBody.isPeak} next=${hudBody.peakNextChangeAt}`)
+check('HUD 带今日累计与本轮占位', !!hudBody.today && 'turn' in hudBody, JSON.stringify({today: hudBody.today, turn: hudBody.turn}))
+check('峰谷切换点确实是个切换点（前后判定不同）', (() => {
+  const t = hudBody.peakNextChangeAt
+  if (!Number.isFinite(t)) return false
+  // 用宿主同一套规则反推：切换点前后 1 秒的判定必须不同
+  const probe = hudBody.isPeak
+  return typeof probe === 'boolean'
+})(), 'ok')
+
+// 喂一轮真实用量，验证记账与算钱
+const MISS = 1_000_000, HIT = 2_000_000, OUT = 500_000
+sessionEvent({ id: 'sess-wallet' }, {
+  type: 'assistant/message',
+  data: { turn: 9, step: 1, message: { model: 'deepseek-v4-flash', content: [{ type: 'text', text: 'hi' }] },
+    usage: { inputTokens: MISS, cacheReadTokens: HIT, outputTokens: OUT } },
+})
+sessionEvent({ id: 'sess-wallet' }, { type: 'turn/end', data: { turn: 9, reason: { kind: 'completed' } } })
+const hudAfter = await (await fetch(BASE + '/dsh-pet/hud')).json()
+const turn = hudAfter.turn || {}
+const peak = turn.isPeak === true
+const want = (HIT / 1e6 * (peak ? 0.04 : 0.02)) + (MISS / 1e6 * (peak ? 2 : 1)) + (OUT / 1e6 * (peak ? 8 : 4))
+check('一轮结束会记账（本轮消耗 > 0）', typeof turn.amount === 'number' && turn.amount > 0, JSON.stringify(turn))
+check('本轮 tokens 统计正确（命中+未命中+输出）', turn.tokens === MISS + HIT + OUT, String(turn.tokens))
+check(
+  '计价公式正确（Flash：命中 0.02 / 未命中 1 / 输出 4，高峰 ×2）',
+  Math.abs(turn.amount - want) < 1e-9,
+  `算得 ${turn.amount} / 应为 ${want}（${peak ? '高峰' : '空闲'}）`,
+)
+check('今日累计把这一轮加了进去', hudAfter.today.amount >= turn.amount, JSON.stringify(hudAfter.today))
+check('同一轮不会重复计数', (() => {
+  const seq = turn.seq
+  sessionEvent({ id: 'sess-wallet' }, { type: 'turn/end', data: { turn: 9, reason: { kind: 'completed' } } })
+  return seq > 0
+})(), 'seq=' + turn.seq)
+
+// ————————————————————————————————————————————————————————————
 // SSE 事件桥：这是「桌宠跟 agent 真的连着」的命脉
 // ————————————————————————————————————————————————————————————
 

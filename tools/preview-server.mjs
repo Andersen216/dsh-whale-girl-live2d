@@ -34,7 +34,24 @@ const MIME = {
 }
 
 const clients = new Set()
+/** 预览用的「上一轮消耗」：turn-end 事件里带的 tokens 直接折算成金额，模拟宿主记账 */
+let previewLastTurn = { ok: true, seq: 0, turn: null, amount: null, tokens: null, ts: null }
+
 function broadcast(payload) {
+  // 模拟宿主记账：一轮结束时把本轮 tokens 折算成金额，供 HUD 的「本轮消耗」读
+  if (payload && payload.t === 'turn-end') {
+    const tokens = Number(payload.tokens) || 0
+    // 粗略按 DeepSeek 谷价（1 元/百万输入 + 4 元/百万输出）估个数，仅预览用
+    const amount = Math.round((tokens / 1e6) * 2.6 * 10000) / 10000
+    previewLastTurn = {
+      ok: true,
+      seq: previewLastTurn.seq + 1,
+      turn: payload.turn || null,
+      amount,
+      tokens,
+      ts: Date.now(),
+    }
+  }
   const frame = `data: ${JSON.stringify(payload)}\n\n`
   for (const res of clients) {
     try {
@@ -169,6 +186,58 @@ const server = http.createServer((req, res) => {
       rel = url.slice('/dsh-pet/model/'.length)
     }
     return serveFile(res, path.join(ASSETS, 'model', rel))
+  }
+
+  /**
+   * 宿主自带的钱包接口（预览版）：真机上是 lib/index.js 算的余额+峰谷+本轮消耗。
+   * 这里给一份格式一致的假数据，预览与测试就走「自有接口」这条路。
+   */
+  if (url === '/dsh-pet/hud') {
+    const nowSec = Math.floor(Date.now() / 1000)
+    const bjHour = new Date((nowSec + 8 * 3600) * 1000).getUTCHours()
+    const dow = new Date((nowSec + 8 * 3600) * 1000).getUTCDay()
+    const peak = dow !== 0 && dow !== 6 && ((bjHour >= 9 && bjHour < 12) || (bjHour >= 14 && bjHour < 18))
+    const nextChange = (Math.floor(nowSec / 3600) + (peak ? 1 : 2)) * 3600
+    return send(res, 200, MIME['.json'], JSON.stringify({
+      ok: true,
+      version: '0.2.0(预览)',
+      source: 'dsh-live2d-pet',
+      isPeak: peak,
+      peakNextChangeAt: nextChange,
+      balance: { ok: true, totalBalance: 42.5, currency: 'CNY', updatedAt: new Date().toISOString() },
+      today: { date: '2026-09-25', amount: 3.86, tokens: 1286000 },
+      turn: previewLastTurn,
+      priceNote: 'Flash 空闲 0.02/1/4・高峰 ×2（元每百万 token）',
+    }))
+  }
+
+  /**
+   * 预览站没有 dsh-whale-widget，这里按它的真实返回格式造一份假数据，
+   * 这样 HUD（余额 / 本轮消耗 / 峰谷倒计时）在预览里也能看出真实样子。
+   * ?peak=0 可以强制成「谷」，方便两边配色都看一眼。
+   */
+  if (url === '/dsh-whale/balance.json') {
+    const q = new URL(req.url || '/', 'http://localhost').searchParams
+    const force = q.get('peak')
+    const nowSec = Math.floor(Date.now() / 1000)
+    // 峰谷切换点定在「下一个整点 + 2 小时」，看起来像真的
+    const nextChange = (Math.floor(nowSec / 3600) + 3) * 3600
+    const isPeak = force === null ? new Date().getHours() >= 8 && new Date().getHours() < 24 : force !== '0'
+    return send(res, 200, MIME['.json'], JSON.stringify({
+      ok: true,
+      version: '0.3.9(预览假数据)',
+      totalBalance: 42.5,
+      currency: 'CNY',
+      isPeak,
+      peakNextChangeAt: nextChange,
+      todayUsage: 3.86,
+      todayUsageCurrency: 'CNY',
+      updatedAt: new Date().toISOString(),
+    }))
+  }
+
+  if (url === '/dsh-whale/last-turn.json') {
+    return send(res, 200, MIME['.json'], JSON.stringify(previewLastTurn))
   }
 
   if (url === '/dsh-pet/events') {
