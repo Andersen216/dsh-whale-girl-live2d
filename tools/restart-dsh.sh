@@ -49,12 +49,14 @@ sleep "$WAIT"
   echo "新进程 PID: $NEW_PID"
 
   # 等它起来并自检（401 = 路由在、只是被信任栅栏挡着；200 = 首页）
+  # 判定标准：首页对 curl 是 401（信任栅栏），所以要看 /dsh-pet/pet.js 是不是 401
   ok=0
   for i in $(seq 1 40); do
     sleep 1
-    home=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:3080/ 2>/dev/null)
-    if [ "$home" = "200" ]; then ok=1; break; fi
+    pet=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:3080/dsh-pet/pet.js 2>/dev/null)
+    if [ "$pet" = "401" ]; then ok=1; break; fi
   done
+  home=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:3080/ 2>/dev/null)
   pet=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:3080/dsh-pet/pet.js 2>/dev/null)
   hud=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:3080/dsh-pet/hud 2>/dev/null)
   whale=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:3080/dsh-whale/balance.json 2>/dev/null)
@@ -68,9 +70,10 @@ sleep "$WAIT"
     NEW_PID=$!
     for i in $(seq 1 40); do
       sleep 1
-      home=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:3080/ 2>/dev/null)
-      if [ "$home" = "200" ]; then ok=1; break; fi
+      pet=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:3080/dsh-pet/pet.js 2>/dev/null)
+      if [ "$pet" = "401" ]; then ok=1; break; fi
     done
+    home=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:3080/ 2>/dev/null)
     pet=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:3080/dsh-pet/pet.js 2>/dev/null)
     hud=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:3080/dsh-pet/hud 2>/dev/null)
     echo "重试后：首页=$home pet.js=$pet hud=$hud 新 PID=$NEW_PID"
