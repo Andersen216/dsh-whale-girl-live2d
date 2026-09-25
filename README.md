@@ -4,6 +4,12 @@
 
 **插件作者：Andersen216**（<https://github.com/Andersen216>）· 代码 MIT · 模型素材非商业（CC BY-NC-SA 4.0）
 
+<img src="docs/screenshots/01-待机.jpg" alt="鲸鱼娘待在 DSH 界面右下角，左手笔右手本子" width="820">
+
+<img src="docs/screenshots/03-钱包HUD.jpg" alt="右键弹出钱包：余额、本轮消耗、峰谷计价" width="266"> <img src="docs/screenshots/02-右键菜单.jpg" alt="右键菜单：表情、道具、场景、动作" width="266"> <img src="docs/screenshots/04-跟着干活.jpg" alt="agent 查资料时她戴上眼镜掏出手机" width="266">
+
+（上面几张都是**真截图**，不是画的示意图；截图声明在 [`screenshots.json`](screenshots.json)，插件市场的详情页会直接读它。）
+
 ---
 
 ## 这是干啥的 / What it does
