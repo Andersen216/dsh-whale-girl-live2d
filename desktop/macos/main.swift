@@ -19,8 +19,10 @@ let PET_URL = "http://127.0.0.1:3080/dsh-pet/standalone"
 // 窗口必须比「她 + 四周面板」大：说话框 370 宽、设置面板 393×471，
 // 窗口太小时面板会被窗口本身裁掉（主人看到的「只剩一个角」就是这个原因）。
 // 多出来的区域是透明的、而且点击穿透 —— 不影响你操作别的窗口。
-let WIN_W: CGFloat = 900
-let WIN_H: CGFloat = 760
+let WIN_W: CGFloat = 560
+// 只把高度加高（方向是「往上长」）：她仍然待在窗口右下角，
+// 但头顶多出 800+px，聊天框才能完整显示出来。
+let WIN_H: CGFloat = 900
 let K_X = "pet.win.x", K_Y = "pet.win.y", K_TOP = "pet.win.top", K_LOW = "perf.low"
 
 /// 插件资源目录：优先用「装进 profile 的那份」，找不到再按 App 包相对位置找，

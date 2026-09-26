@@ -528,6 +528,26 @@
   // 写成 "[object CSS]"（12 个字符），整个界面静默失去定位与外观。踩过一次。
 
   const PET_CSS = `
+/* ——— 设置：独立的小弹窗（居中、有自己的标题栏和关闭键，不再挂在她身上） ——— */
+.dshp-menu.dshp-modal{width:min(430px, calc(100vw - 32px))!important;
+  max-height:calc(100vh - 40px)!important;overflow:hidden}
+.dshp-menu.dshp-modal .dshp-tabs{background:var(--dshp-accent-soft);border-radius:12px 12px 0 0;
+  padding:8px 10px;margin:-2px -2px 6px}
+
+/* ——— 说话框：做成带小尖儿的气泡（尖儿指向她）、字号小一点、一行能显示全 ——— */
+.dshp-composer{width:min(420px, calc(100vw - 40px))}
+.dshp-composer::after{content:'';position:absolute;left:50%;bottom:-8px;margin-left:-8px;
+  width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;
+  border-top:9px solid var(--dshp-bg);pointer-events:none;filter:drop-shadow(0 2px 2px rgba(0,0,0,.10))}
+.dshp-composer textarea{font-size:12px!important;line-height:1.5!important;min-height:42px!important;
+  white-space:pre;overflow-x:auto}
+.dshp-composer .dshp-hint{font-size:11px;line-height:1.5}
+/* ——— 设置页：独立居中的弹窗（不再挂在她身上，避免挡住她/被窗口裁掉） ——— */
+.dshp-menu.dshp-modal{left:50%!important;top:50%!important;right:auto!important;bottom:auto!important;
+  transform:translate(-50%,-50%)!important;
+  --dshp-shift:0px!important;--dshp-shift-y:0px!important;
+  box-shadow:0 24px 60px rgba(6,12,32,.42)}
+
 .dshp-root{position:fixed;z-index:2147483000;pointer-events:none;
   --dshp-s:1;
   /* 面板单独一套缩放：气泡和工具栏可以跟着模型缩得很小，但菜单里有滑块、
@@ -1682,15 +1702,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const anchor = headScreenX() // 对准头顶，而不是整个场景的中心
     // 面板基准是「以桌宠中心居中」（left:50% + translateX(-50%)），所以位移 = 锚点 - 根节点中心
     let shift = anchor - (r.left + r.width / 2)
-    // 主人要求：说话框别压在她正头顶 —— 往「空间更大的一侧」让开半个身位。
-    // 纯计算、没有随机数，所以每次弹的位置都一样（之前那种「随机卡到某个地方」是
-    // 因为纵向没夹取 + 面板高度变了没重新摆，现在两者都修了）。
-    if (panel.classList.contains('dshp-composer')) {
-      const bodyHalf = Math.max(70, (r.width || 0) / 2)
-      const need = bodyHalf + w / 2 + 10
-      if (anchor < vw / 2) shift += need      // 她偏左 → 框往右让
-      else shift -= need                      // 她偏右 → 框往左让
-    }
+
     // 靠墙时往反方向挪，保证整个面板（含 × ）都在屏幕里
     const left = anchor + shift - w / 2
     if (left < pad) shift += pad - left
@@ -2381,7 +2393,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     bubbleEl.append(head, body, foot)
 
     const dock = $('div', 'dshp-dock')
-    const talkBtn = $('button', 'dshp-btn dshp-primary', '💬 说话')
+    const talkBtn = $('button', 'dshp-btn dshp-primary', '💬 聊天')
     const menuBtn = $('button', 'dshp-btn', '⋯')
     const hideBtn = $('button', 'dshp-btn', '–')
     hideBtn.title = '收起（桌面版会缩成贴边小球）'
@@ -3594,6 +3606,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   }
 
   function renderPane(id) {
+    // 主人要求：设置别压在她身上、也别被窗口裁 —— 切到设置页时整个菜单变成居中弹窗
+    try {
+      ui.menu.el.classList.toggle('dshp-modal', id === 'setting')
+    } catch (err) {}
     const panes = ui.menu.panes
     panes.textContent = ''
     // 顶上永远有一行「她现在是什么状态」，免得一堆按钮里看不出哪个是开着的
