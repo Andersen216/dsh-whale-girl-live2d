@@ -582,6 +582,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   width:max-content;white-space:nowrap;
   pointer-events:auto;opacity:0;transition:opacity .22s ease}
 .dshp-root.dshp-hover .dshp-dock,.dshp-root.dshp-open .dshp-dock{opacity:1}
+/* 面板永远不许比可视区域还高 —— 桌面壳的窗口比整页小，菜单却挺高，
+   超出部分原来直接被窗口裁掉（主人报的「设置一打开就被切、显示不全」）。
+   现在：限高 + 内部滚动；面板本身就是可拖动的（见 makeDraggable）。 */
+.dshp-panel{max-height:calc(100vh - 20px);display:flex;flex-direction:column}
+.dshp-panes{overflow:auto;overscroll-behavior:contain;min-height:0}
+.dshp-hud{overflow:auto}
+.dshp-free{transition:none!important}
 .dshp-btn{border:1px solid var(--dshp-line);background:var(--dshp-bg);color:var(--dshp-fg);
   border-radius:calc(11px * var(--dshp-ds));flex:0 0 auto;white-space:nowrap;
   padding:calc(5px * var(--dshp-ds)) calc(11px * var(--dshp-ds));
@@ -1583,8 +1590,84 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return r.left + r.width / 2
   }
 
+  /** 面板被拖到哪儿了（按 key 记；拖动过就不再自动归位） */
+  const freePos = Object.assign({}, readLayout().free || {})
+
+  /** 面板有「自由位置」就按它摆；返回 true 表示已接管，不再走自动定位 */
+  function applyFree(panel) {
+    const key = panel.dataset ? panel.dataset.dshpKey : null
+    if (!key || !freePos[key]) return false
+    const w = panel.offsetWidth || 0
+    const h = panel.offsetHeight || 0
+    const x = clamp(freePos[key].x, 2, Math.max(2, window.innerWidth - w - 2))
+    const y = clamp(freePos[key].y, 2, Math.max(2, window.innerHeight - h - 2))
+    panel.style.setProperty('--dshp-shift', '0px')
+    panel.style.setProperty('--dshp-shift-y', '0px')
+    panel.style.left = x + 'px'
+    panel.style.top = y + 'px'
+    panel.style.right = 'auto'
+    panel.style.bottom = 'auto'
+    panel.style.transform = 'none'
+    return true
+  }
+
+  /**
+   * 让面板可以被拖着走（按住标题栏拖），位置记进 layout。
+   * 主人要的：「别老固定在她头顶，我想放哪放哪」；双击标题栏可以恢复自动跟随。
+   */
+  function makeDraggable(panel, handle, key) {
+    if (!panel || !handle) return
+    panel.dataset.dshpKey = key
+    handle.style.cursor = 'grab'
+    handle.title = '按住这里拖动这个框（双击恢复自动跟随）'
+    let from = null
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return
+      const r = panel.getBoundingClientRect()
+      from = { dx: e.clientX - r.left, dy: e.clientY - r.top }
+      panel.classList.add('dshp-free')
+      try {
+        handle.setPointerCapture(e.pointerId)
+      } catch (err) {}
+      handle.style.cursor = 'grabbing'
+      e.preventDefault()
+      e.stopPropagation()
+    })
+    handle.addEventListener('pointermove', (e) => {
+      if (!from) return
+      const w = panel.offsetWidth
+      const h = panel.offsetHeight
+      freePos[key] = {
+        x: Math.round(clamp(e.clientX - from.dx, 2, Math.max(2, window.innerWidth - w - 2))),
+        y: Math.round(clamp(e.clientY - from.dy, 2, Math.max(2, window.innerHeight - h - 2))),
+      }
+      applyFree(panel)
+    })
+    const stop = () => {
+      if (!from) return
+      from = null
+      handle.style.cursor = 'grab'
+      saveLayout({ free: freePos })
+    }
+    handle.addEventListener('pointerup', stop)
+    handle.addEventListener('pointercancel', stop)
+    handle.addEventListener('dblclick', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      delete freePos[key]
+      delete panel.dataset.dshpKey
+      panel.style.left = panel.style.top = panel.style.right = panel.style.bottom = ''
+      panel.style.transform = ''
+      panel.classList.remove('dshp-free')
+      panel.dataset.dshpKey = key
+      saveLayout({ free: freePos })
+      clampPanels()
+    })
+  }
+
   function placePanel(panel) {
     if (!panel) return
+    if (applyFree(panel)) return        // 被拖过就听主人的，别再自动挪
     const vw = window.innerWidth
     const pad = 10
     panel.style.setProperty('--dshp-shift', '0px')
@@ -1601,8 +1684,19 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     else if (left + w > vw - pad) shift -= left + w - (vw - pad)
     panel.style.setProperty('--dshp-shift', Math.round(shift) + 'px')
     // 纵向兜底：桌宠被拖到屏幕顶端时，面板别伸到屏幕外面去
-    const top = panel.getBoundingClientRect().top
-    panel.style.setProperty('--dshp-shift-y', top < pad ? Math.round(pad - top) + 'px' : '0px')
+    const rect = panel.getBoundingClientRect()
+    let dy = 0
+    if (rect.top < pad) dy = pad - rect.top
+    else if (rect.bottom > window.innerHeight - pad) dy = (window.innerHeight - pad) - rect.bottom
+    panel.style.setProperty('--dshp-shift-y', Math.round(dy) + 'px')
+  }
+
+  function wirePanelDragging() {
+    try {
+      makeDraggable(ui.menu.el, ui.menu.el.querySelector('.dshp-tabs'), 'menu')
+      makeDraggable(ui.hud.el, ui.hud.el.querySelector('.dshp-hud-head'), 'hud')
+      makeDraggable(ui.composer.el, ui.composer.el.querySelector('.dshp-close'), 'composer')
+    } catch (err) {}
   }
 
   function clampPanels() {
@@ -2297,6 +2391,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const menu = $('div', 'dshp-panel dshp-menu')
     const tabs = $('div', 'dshp-tabs')
     const panes = $('div')
+    panes.classList.add('dshp-panes')
     menu.append(tabs, panes)
     addCloseButton(menu)
 
@@ -2416,6 +2511,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   // ——————————————————————————————————————————————————————————————
 
   function wireInteractions() {
+    wirePanelDragging()
     const root = ui.root
     let dragging = false
     let dragMoved = false

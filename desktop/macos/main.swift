@@ -16,8 +16,8 @@ import Cocoa
 import WebKit
 
 let PET_URL = "http://127.0.0.1:3080/dsh-pet/standalone"
-let WIN_W: CGFloat = 520
-let WIN_H: CGFloat = 520
+let WIN_W: CGFloat = 560
+let WIN_H: CGFloat = 620
 let K_X = "pet.win.x", K_Y = "pet.win.y", K_TOP = "pet.win.top", K_LOW = "perf.low"
 
 /// 插件资源目录：优先用「装进 profile 的那份」，找不到再按 App 包相对位置找，
