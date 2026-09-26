@@ -16,9 +16,9 @@ import Cocoa
 import WebKit
 
 let PET_URL = "http://127.0.0.1:3080/dsh-pet/standalone"
-let WIN_W: CGFloat = 620
-let WIN_H: CGFloat = 560
-let K_X = "pet.win.x", K_Y = "pet.win.y", K_TOP = "pet.win.top"
+let WIN_W: CGFloat = 520
+let WIN_H: CGFloat = 520
+let K_X = "pet.win.x", K_Y = "pet.win.y", K_TOP = "pet.win.top", K_LOW = "perf.low"
 
 /// 插件资源目录：优先用「装进 profile 的那份」，找不到再按 App 包相对位置找，
 /// 这样不管 App 放在 dist/ 还是被拷到「应用程序」里都能定位到图标。
@@ -67,8 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         // 关键：别让 macOS 把「没人操作的透明窗口」判成 App Nap 而掐掉 requestAnimationFrame。
         // 被掐的症状极隐蔽：页面不报错、模型数据也加载了，但 rAF 永不触发 →
         // 前端启动流程停在「等一帧」那一步，于是既画不出她、也连不上事件流。
-        activity = ProcessInfo.processInfo.beginActivity(
-            options: [.userInitiated, .latencyCritical], reason: "DS 鲸鱼娘桌宠需要持续渲染")
+        beginAwake()
         makeWindow()
         makeWeb()
         makeStatusItem()
@@ -77,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         restorePosition()
         win.orderFrontRegardless()
         load()
-        probe = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+        probe = Timer.scheduledTimer(withTimeInterval: 0.09, repeats: true) { [weak self] _ in
             self?.updateHit()
         }
         RunLoop.current.add(probe!, forMode: .common)
@@ -194,6 +193,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let top = m.addItem(withTitle: "总在最前", action: #selector(toggleTop), keyEquivalent: "")
         top.state = (UserDefaults.standard.object(forKey: K_TOP) as? Bool ?? true) ? .on : .off
         m.addItem(.separator())
+        let low = m.addItem(withTitle: "低性能模式（少动、省电）", action: #selector(toggleLowPower), keyEquivalent: "")
+        low.state = (UserDefaults.standard.object(forKey: K_LOW) as? Bool ?? false) ? .on : .off
         m.addItem(withTitle: "保存一张截图（看效果用）", action: #selector(saveShot), keyEquivalent: "")
         m.addItem(withTitle: "打开自检页（浏览器）", action: #selector(openDiag), keyEquivalent: "")
         m.addItem(withTitle: "打开 DSH 插件设置目录", action: #selector(openHome), keyEquivalent: "")
@@ -285,6 +286,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     """
 
     func updateHit() {
+        if !win.isVisible { return }        // 收起成小球时主窗口不在屏幕上，没必要探
         let m = NSEvent.mouseLocation
         let f = win.frame
         if !f.contains(m) { setInside(false); return }
@@ -355,9 +357,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 self?.web.evaluateJavaScript("window.DSHPet && DSHPet.setHidden && DSHPet.setHidden(false)",
                                              completionHandler: nil)
+                self?.applyLowPower()
             }
         }
         startHealthChecks()
+        // （自动截图已取消：那是开发期看效果用的，一次全页重绘不便宜，改成菜单里手动点）
     }
 
     /// 页面里的 console / 报错转发过来的入口
@@ -422,8 +426,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     /// 桌宠是透明的，出问题时「看不见」和「没启动」长得一样，只能靠这个区分。
     func startHealthChecks() {
         health?.invalidate()
-        health = Timer.scheduledTimer(withTimeInterval: 6, repeats: true) { [weak self] _ in
-            guard let self else { return }
+        health = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
+            guard let self, self.win.isVisible else { return }
             let js = """
             (function(){try{
               var s = (window.DSHPet && window.DSHPet.state) || null;
@@ -491,6 +495,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             return
         }
         decisionHandler(.allow)
+    }
+
+    /// 让她「可见时满速、不可见时让系统降频」。
+    ///
+    /// 之前用的是 .latencyCritical（最激进的档）+ 一直不释放 —— 结果就是她永远满帧渲染，
+    /// 浏览器里标签页不聚焦会自动降频、壳子里不会，所以主人在 Mac 上觉得又热又卡。
+    /// 现在：只在她可见时申请，收起成小球就释放，让 macOS 的 App Nap 接管。
+    func beginAwake() {
+        if activity == nil {
+            activity = ProcessInfo.processInfo.beginActivity(
+                options: [.userInitiated], reason: "DS 鲸鱼娘可见时需要持续渲染")
+        }
+    }
+
+    func endAwake() {
+        if let a = activity {
+            ProcessInfo.processInfo.endActivity(a)
+            activity = nil
+        }
+    }
+
+    /// 低性能模式：帧率 20、渲染分辨率 1 倍、去掉自言自语和自主动作
+    @objc func toggleLowPower(_ item: NSMenuItem) {
+        let on = !(UserDefaults.standard.object(forKey: K_LOW) as? Bool ?? false)
+        UserDefaults.standard.set(on, forKey: K_LOW)
+        item.state = on ? .on : .off
+        applyLowPower()
+    }
+
+    func applyLowPower() {
+        let on = UserDefaults.standard.object(forKey: K_LOW) as? Bool ?? false
+        web.evaluateJavaScript("window.DSHPet && DSHPet.setLowPower && DSHPet.setLowPower(\(on))",
+                               completionHandler: nil)
     }
 
     /// 把视图树里所有「白色底」拆掉。

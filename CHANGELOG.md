@@ -1,5 +1,72 @@
 # 更新日志 / Changelog
 
+## 0.4.0 — 2026-09-26
+
+> **English summary / 英文摘要**
+>
+> **New: a macOS desktop shell.** The plugin can now live on your desktop instead of inside a browser tab:
+> a native transparent, borderless, always-on-top window with **click-through** (only the pixels she
+> actually covers take the mouse), drag-to-move, an **edge-snapping frosted-glass ball** when collapsed,
+> a 🐋 menu-bar entry, "quit the app" in her own settings, a **low-power mode**, and a proper app icon.
+> It is shipped as a separate download in Releases — the plugin itself (the web version) is unchanged and
+> still supports Windows / macOS / Linux.
+>
+> **Fixed**: her tail and out-of-frame expressions were being clipped (the viewport was exactly the
+> character's bounding box, with no margin); a large white rectangle behind her in the desktop shell
+> (the private `WKWebView` background key is `_setDrawsBackground:`, not `setDrawsBackground:`);
+> typing was impossible in the shell (borderless windows need `canBecomeKey`); the collapse button was
+> a one-way trip (the restore handle was missing from the click-through whitelist); and the ball could
+> disappear with no way back.
+>
+> **Performance**: frame rate is now capped (30 fps standard / 20 fps low-power) instead of running at
+> display refresh (up to 120 fps on ProMotion), the render resolution was lowered from 2× to 1.5×
+> (1× in low-power), the desktop shell releases its App Nap exemption while collapsed, and the hit-test
+> probe was slowed down. Measured on this machine: shell process 0.5–0.8 % CPU, WebKit renderer 0.2–0.4 %.
+
+### 新增：macOS 桌面版（原生壳）
+
+她可以**搬到桌面上**，不再只活在浏览器标签页里 —— 透明、无边框、永远置顶的原生窗口：
+
+- **点击穿透**：只有她真正占的像素才收鼠标事件（用模型自己的 alpha 掩码判定），
+  其余地方点一下就穿到下面的 App —— 不会挡你干活
+- **拖她 = 拖窗口**，松手位置记住；拖动不会被误判成「摸头」
+- **收起 = 贴边悬浮球**：瞬间出现在离她最近的那一侧，深色玻璃球 + DSH 图标，
+  悬停微放大、拖动跟手、松手动画贴边
+- 菜单栏 🐋：重新加载 / 回到右下角 / 收起成小球 / 展开 / 小球大小 / **低性能模式** / 保存截图 / **彻底退出**
+- 她自己的设置页里也多了「收起成悬浮小球」「彻底关闭桌宠应用」
+- **App 图标**：蓝色渐变圆角框 + 她的平常脸立绘
+- 只安装一处：`~/Applications/DS 鲸鱼娘桌宠.app`（刻意不在仓库里留第二份）
+
+**装法**：先在 DSH 里装插件（就是下面那些），再去 Releases 下载
+`DS-WhaleGirl-Pet-macOS-*.zip`。完整说明见 [`desktop/README.md`](desktop/README.md)。
+
+### 修：尾巴和出格的表情被截掉
+
+原来视窗高度**正好等于**角色实体高度、宽度按固定宽高比算，所以横向超出的尾巴、
+纵向超出的表情都被画布裁掉。现在实体四周各留 10% 余量，宽度取「固定宽高比」与
+「实体宽度+余量」中更宽者；缩放改成按实体高度算 —— 她**屏幕上的大小不变**，周围多出空间。
+
+### 修：桌面壳里的四个硬伤
+
+1. **大白框**：`WKWebView` 关白底的老写法查的是 `setDrawsBackground:`，但这个私有属性在
+   运行时真名是 `_setDrawsBackground:`（KVC 找得到），于是一直被判「不支持」而跳过 → 白底常驻。
+   现在两个真键都调上，并递归拆掉内部 `NSScrollView` 的白底。
+2. **打不了字**：无边框窗口 `canBecomeKey` 默认 false，键盘事件进不到窗口。
+   现在是 `PetWindow` 子类 + 点她时 `NSApp.activate` + 焦点交给网页。
+3. **一收起就再也点不回来**：恢复把手是 `.dshp-tab`，而点击穿透的判定写死了一张类名白名单，
+   恰好没它。现在改成「`elementFromPoint` 返回的任何她自己的 DOM 都算可交互」。
+4. **收起后小球不见了**：加了「页面隐藏但两个窗口都不见 → 自动把球叫回来」的自愈。
+
+### 性能：她之前是满帧满分辨率在跑
+
+- 帧率上限 **30 帧**（低性能档 20 帧）—— 之前跟着显示器刷新率跑，ProMotion 上就是 120 帧
+- 渲染分辨率从 2 倍降到 **1.5 倍**（低性能档 1 倍）
+- 桌面壳**收起成小球时释放 App Nap 豁免** —— 之前的写法让她永远满速渲染，
+  浏览器里标签页不聚焦会自动降频、壳子里不会，这就是「浏览器不卡、壳子卡」的原因
+- 点击穿透探针 50ms → 90ms，健康检查 6s → 20s，去掉开发期的自动截图
+- 新增**低性能模式**（菜单栏 🐋 可切）：不自己找戏、不自言自语、不弹瞌睡台词，
+  只留眨眼 + 轻微摆动 + 视线；点了她才动
+
 ## 0.3.3 — 2026-09-25
 
 > **English summary / 英文摘要**

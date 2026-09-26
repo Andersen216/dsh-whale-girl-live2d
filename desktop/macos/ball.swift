@@ -171,11 +171,13 @@ extension AppDelegate {
         win.orderOut(nil)
         UserDefaults.standard.set(Double(x), forKey: "ball.x")
         UserDefaults.standard.set(Double(y), forKey: "ball.y")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.endAwake() }
         log("已收起成小球 → 贴" + (dLeft <= dRight ? "左" : "右") + "边 (\(Int(x)),\(Int(y))) 可见=\(b.isVisible)")
     }
 
     @objc func expandFromBall() {
         guard let b = ball else { return }
+        beginAwake()
         b.orderOut(nil)
         win.alphaValue = 1
         win.orderFrontRegardless()

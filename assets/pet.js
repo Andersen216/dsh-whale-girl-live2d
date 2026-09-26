@@ -1429,6 +1429,44 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (!window.PIXI || !window.PIXI.live2d) throw new Error('Live2D 运行时未就绪')
   }
 
+  /**
+   * 性能档。
+   *
+   * 为什么要有：桌面壳（Mac 原生 App）为了不让她卡住，阻止了 macOS 的 App Nap，
+   * 于是**永远满帧渲染** —— 浏览器里标签页不聚焦会自动降频，壳子里不会，
+   * 所以主人在壳子里觉得电脑又热又卡。
+   *
+   * 低性能模式：帧率 20、渲染分辨率 1 倍、去掉自言自语和自主动作，
+   * 只留眨眼 + 轻微摆动 + 视线；只有点她才会动。
+   */
+  const PERF = { low: false }
+
+  function applyPerf() {
+    if (app) {
+      app.ticker.maxFPS = PERF.low ? 20 : 30
+      const want = PERF.low ? 1 : Math.min(window.devicePixelRatio || 1, 1.5)
+      try {
+        if (app.renderer.resolution !== want) {
+          const w = app.renderer.width
+          const h = app.renderer.height
+          app.renderer.resolution = want
+          app.renderer.resize(w, h)
+        }
+      } catch (err) {}
+    }
+    try {
+      document.body.classList.toggle('dshp-lowpower', PERF.low)
+    } catch (err) {}
+  }
+
+  /** 壳子/设置页调它切档；返回当前档位方便确认 */
+  function setLowPower(on) {
+    PERF.low = !!on
+    applyPerf()
+    log('性能档：' + (PERF.low ? '低性能（少动、省电、20 帧）' : '标准（30 帧）'))
+    return PERF.low
+  }
+
   async function buildModel() {
     const layout = readLayout()
 
@@ -1440,9 +1478,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       autoDensity: true,
       // 掩码要读画布像素，没有 preserveDrawingBuffer 的话读到的是被清空后的缓冲
       preserveDrawingBuffer: true,
-      resolution: Math.min(window.devicePixelRatio || 1, 2),
+      resolution: Math.min(window.devicePixelRatio || 1, PERF.low ? 1 : 1.5),
       powerPreference: 'low-power',
     })
+    // 这个模型 30 帧已经足够顺；60 帧纯粹是白烧 CPU/GPU（主人反馈电脑发热、发卡）
+    app.ticker.maxFPS = PERF.low ? 20 : 30
+    applyPerf()
     ui.stage.appendChild(app.view)
 
     const { Live2DModel } = PIXI.live2d
@@ -4084,6 +4125,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // 待机大脑：3.5–7.5 秒挑一件事
     setInterval(() => {
       if (agent.status !== 'idle') return
+      if (PERF.low) return                      // 低性能档：不自言自语、不自己找戏
       if (ui.root.classList.contains('dshp-hidden')) return
       if (document.hidden) return
       const now = performance.now()
@@ -4095,6 +4137,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // 睡眠序列：先打哈欠，再睡着；鼠标一动就醒
     setInterval(() => {
       if (!CFG.sleepAfterMs || agent.status !== 'idle') return
+      if (PERF.low) return                      // 低性能档：连打哈欠/睡觉都省掉
       const quiet = Date.now() - agent.lastActivity
       if (idle.sleep === 0 && quiet > CFG.sleepAfterMs) {
         idle.sleep = 2
@@ -4122,6 +4165,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     hitTest,
     /** 隐藏 / 恢复。壳子（桌面版）收起成小球后，靠它把页面里的状态一起改回来 */
     setHidden,
+    /** 性能档：壳子/设置页用它切「低性能模式」 */
+    setLowPower,
+    isLowPower: () => PERF.low,
     rebuildMask: () => {
       mask.dirty = true
     },

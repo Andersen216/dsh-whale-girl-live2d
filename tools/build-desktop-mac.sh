@@ -11,7 +11,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/desktop/macos/main.swift"
 PLIST="$ROOT/desktop/macos/Info.plist"
-APP="$ROOT/dist/desktop/DS 鲸鱼娘桌宠.app"
+# 只装一个地方：「应用程序」。以前 dist/desktop 里还留一份，结果主人有两个 App
+# 不知道点哪个 —— 现在构建先写临时目录，最后只往 ~/Applications 放一份。
+APP_NAME="DS 鲸鱼娘桌宠.app"
+APP="$HOME/Applications/$APP_NAME"
+TMP_APP="$ROOT/.build/$APP_NAME"
 BIN="WhaleGirlPet"
 BUNDLE_ID="com.andersen216.dsh.whalegirlpet"
 
@@ -20,17 +24,17 @@ if [ "${1:-}" = "--kill" ]; then
   exit 0
 fi
 
-echo "① 准备 App 骨架：$APP"
-rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$PLIST" "$APP/Contents/Info.plist"
-printf 'APPL????' > "$APP/Contents/PkgInfo"
+echo "① 准备 App 骨架（先建在临时目录）"
+rm -rf "$TMP_APP"
+mkdir -p "$TMP_APP/Contents/MacOS" "$TMP_APP/Contents/Resources"
+cp "$PLIST" "$TMP_APP/Contents/Info.plist"
+printf 'APPL????' > "$TMP_APP/Contents/PkgInfo"
 
 echo "② 编译（swiftc，只有系统框架）"
 swiftc -O -swift-version 5 \
   -target "$(uname -m)-apple-macos13.0" \
   -framework Cocoa -framework WebKit \
-  -o "$APP/Contents/MacOS/$BIN" "$SRC" "$ROOT/desktop/macos/ball.swift"
+  -o "$TMP_APP/Contents/MacOS/$BIN" "$SRC" "$ROOT/desktop/macos/ball.swift"
 
 echo "③ 图标（蓝底圆角框 + 她的平常脸立绘）"
 ICON="$ROOT/assets/model/icon.png"
@@ -38,7 +42,7 @@ if [ -f "$ICON" ] && command -v swiftc >/dev/null; then
   TMPICON="$(mktemp -d)"
   if swiftc -O -o "$TMPICON/mkicon" "$ROOT/tools/make-appicon.swift" 2>/dev/null; then
     "$TMPICON/mkicon" "$ICON" "$TMPICON" >/dev/null 2>&1
-    if iconutil -c icns "$TMPICON/icon.iconset" -o "$APP/Contents/Resources/icon.icns" 2>/dev/null; then
+    if iconutil -c icns "$TMPICON/icon.iconset" -o "$TMP_APP/Contents/Resources/icon.icns" 2>/dev/null; then
       echo "   ✓ 图标已生成"
     else
       echo "   · iconutil 失败，用默认图标"
@@ -50,16 +54,29 @@ if [ -f "$ICON" ] && command -v swiftc >/dev/null; then
 fi
 
 echo "④ 临时签名（本机自己编译的，不需要开发者证书）"
-codesign --force --sign - --identifier "$BUNDLE_ID" "$APP" 2>/dev/null \
+codesign --force --sign - --identifier "$BUNDLE_ID" "$TMP_APP" 2>/dev/null \
   && echo "   ✓ 已签名" || echo "   · 跳过签名"
+
+echo "⑤ 安装到「应用程序」（只保留这一份）"
+mkdir -p "$HOME/Applications"
+pkill -f "$BIN" 2>/dev/null || true
+sleep 0.4
+rm -rf "$APP"
+cp -R "$TMP_APP" "$APP"
+rm -rf "$TMP_APP" "$ROOT/dist/desktop"      # 不留第二份，免得主人不知道点哪个
+rmdir "$ROOT/.build" 2>/dev/null || true
 
 echo
 echo "完成：$APP"
 du -sh "$APP" | awk '{print "体积：" $1}'
+echo "（只有这一份。启动台/聚焦搜「鲸鱼娘」双击即可打开）"
 
-if [ "${1:-}" = "--run" ]; then
-  echo "启动中…（菜单栏会出现一个 🐋 图标，从那里可以重新加载 / 退出）"
+if [ "${1:-}" = "--run" ] || [ "${1:-}" = "" ]; then
   pkill -f "$BIN" 2>/dev/null || true
   sleep 0.4
-  open "$APP"
+  open "$APP" && echo "已启动"
+fi
+if [ "${1:-}" = "--uninstall" ]; then
+  pkill -f "$BIN" 2>/dev/null || true
+  rm -rf "$APP" && echo "已卸载"
 fi
