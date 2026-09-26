@@ -194,6 +194,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let top = m.addItem(withTitle: "总在最前", action: #selector(toggleTop), keyEquivalent: "")
         top.state = (UserDefaults.standard.object(forKey: K_TOP) as? Bool ?? true) ? .on : .off
         m.addItem(.separator())
+        m.addItem(withTitle: "保存一张截图（看效果用）", action: #selector(saveShot), keyEquivalent: "")
         m.addItem(withTitle: "打开自检页（浏览器）", action: #selector(openDiag), keyEquivalent: "")
         m.addItem(withTitle: "打开 DSH 插件设置目录", action: #selector(openHome), keyEquivalent: "")
         m.addItem(.separator())
@@ -378,6 +379,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         log("收到退出指令，正在关闭桌宠")
         UserDefaults.standard.synchronize()
         NSApp.terminate(nil)
+    }
+
+    /// 存一张她现在的样子到 ~/.dsh/whalegirlpet-shot.png
+    /// （透明窗口没法用系统截图工具抓，只能从 WebView 里自己拍；做 UI 时用它看效果）
+    @objc func saveShot() {
+        web.takeSnapshot(with: WKSnapshotConfiguration()) { [weak self] img, err in
+            guard let self else { return }
+            guard let img, let tiff = img.tiffRepresentation,
+                  let rep = NSBitmapImageRep(data: tiff),
+                  let png = rep.representation(using: .png, properties: [:]) else {
+                self.log("截图失败：\(err?.localizedDescription ?? "未知原因")")
+                return
+            }
+            let path = NSHomeDirectory() + "/.dsh/whalegirlpet-shot.png"
+            do {
+                try png.write(to: URL(fileURLWithPath: path))
+                self.log("已保存截图：\(path)（\(rep.pixelsWide)×\(rep.pixelsHigh)）")
+            } catch {
+                self.log("截图写盘失败：\(error.localizedDescription)")
+            }
+        }
     }
 
     /// 把自己拷到「应用程序」，之后就能像普通 App 一样双击打开（Launchpad / 聚焦都能搜到）

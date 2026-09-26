@@ -1580,14 +1580,22 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // 角色在画布里的实体范围（归一化）。没测出来就退回整个画布。
     const box = contentBox || { x0: 0, y0: 0, x1: 1, y1: 1, bands: null }
     const ch = Math.max(0.02, box.y1 - box.y0)
+    const cw = Math.max(0.02, box.x1 - box.x0)
 
-    // 视窗：纵向取实体顶部 frac，横向按固定宽高比、以该档的质量重心居中
-    const viewHModel = ch * frac * baseH
-    const viewWModel = viewHModel * VIEW_ASPECT
+    // 四周留余量：主人反馈「尾巴被截掉、有些表情出格被掐」。
+    // 原因是原来视窗高度**正好等于**实体高度、宽度又按固定宽高比算 ——
+    // 横向超出（尾巴、头顶鲸）和纵向超出（举起来的道具、惊讶表情）就都被裁掉了。
+    // 现在实体四周各留 PAD，窗口比实体大一圈，她才能完整显示。
+    const PAD = 0.1
+    const viewHModel = ch * frac * baseH * (1 + PAD * 2)
+    // 宽度取「固定宽高比」和「实体宽度 + 余量」里更宽的那个
+    const viewWModel = Math.max(viewHModel * VIEW_ASPECT, cw * baseW * (1 + PAD * 2))
     const centerXNorm = box.bands && box.bands[mode] ? box.bands[mode].center : (box.x0 + box.x1) / 2
     const centerXModel = centerXNorm * baseW
 
-    let scale = wanted / viewHModel
+    // 缩放按**实体高度**算（不是视窗高度）：加了余量之后她的大小和以前一模一样，
+    // 只是周围多出一圈空间。
+    let scale = wanted / (ch * frac * baseH)
     const maxW = Math.max(240, window.innerWidth * (CFG.maxWidthRatio || 0.5))
     if (viewWModel * scale > maxW) scale = maxW / viewWModel
 
@@ -1598,9 +1606,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // 锚点放到左上角：position 就等于「模型画布左上角在容器里的位置」，算起来最直观
     model.anchor.set(0, 0)
     app.renderer.resize(w, h)
+    const padYModel = ch * frac * baseH * PAD
     model.position.set(
       -Math.round((centerXModel - viewWModel / 2) * scale),
-      -Math.round(box.y0 * baseH * scale),
+      -Math.round((box.y0 * baseH - padYModel) * scale),
     )
 
     ui.stage.style.width = w + 'px'

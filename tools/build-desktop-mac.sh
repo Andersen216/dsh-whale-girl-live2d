@@ -32,27 +32,21 @@ swiftc -O -swift-version 5 \
   -framework Cocoa -framework WebKit \
   -o "$APP/Contents/MacOS/$BIN" "$SRC" "$ROOT/desktop/macos/ball.swift"
 
-echo "③ 图标（用插件里那张模型图标，没有就跳过）"
+echo "③ 图标（蓝底圆角框 + 她的平常脸立绘）"
 ICON="$ROOT/assets/model/icon.png"
-if [ -f "$ICON" ] && command -v sips >/dev/null; then
-  TMP="$(mktemp -d)"
-  for s in 16 32 64 128 256 512; do
-    sips -z $s $s "$ICON" --out "$TMP/icon_${s}.png" >/dev/null 2>&1 || true
-  done
-  # 生成 .icns（iconutil 要求 iconset 目录结构）
-  SET="$TMP/icon.iconset"; mkdir -p "$SET"
-  cp "$TMP/icon_16.png"  "$SET/icon_16x16.png"      2>/dev/null || true
-  cp "$TMP/icon_32.png"  "$SET/icon_16x16@2x.png"   2>/dev/null || true
-  cp "$TMP/icon_32.png"  "$SET/icon_32x32.png"      2>/dev/null || true
-  cp "$TMP/icon_64.png"  "$SET/icon_32x32@2x.png"   2>/dev/null || true
-  cp "$TMP/icon_128.png" "$SET/icon_128x128.png"    2>/dev/null || true
-  cp "$TMP/icon_256.png" "$SET/icon_128x128@2x.png" 2>/dev/null || true
-  cp "$TMP/icon_256.png" "$SET/icon_256x256.png"    2>/dev/null || true
-  cp "$TMP/icon_512.png" "$SET/icon_256x256@2x.png" 2>/dev/null || true
-  cp "$TMP/icon_512.png" "$SET/icon_512x512.png"    2>/dev/null || true
-  iconutil -c icns "$SET" -o "$APP/Contents/Resources/icon.icns" 2>/dev/null \
-    && echo "   ✓ 图标已生成" || echo "   · 图标生成失败，用默认图标"
-  rm -rf "$TMP"
+if [ -f "$ICON" ] && command -v swiftc >/dev/null; then
+  TMPICON="$(mktemp -d)"
+  if swiftc -O -o "$TMPICON/mkicon" "$ROOT/tools/make-appicon.swift" 2>/dev/null; then
+    "$TMPICON/mkicon" "$ICON" "$TMPICON" >/dev/null 2>&1
+    if iconutil -c icns "$TMPICON/icon.iconset" -o "$APP/Contents/Resources/icon.icns" 2>/dev/null; then
+      echo "   ✓ 图标已生成"
+    else
+      echo "   · iconutil 失败，用默认图标"
+    fi
+  else
+    echo "   · 图标工具编译失败，用默认图标"
+  fi
+  rm -rf "$TMPICON"
 fi
 
 echo "④ 临时签名（本机自己编译的，不需要开发者证书）"

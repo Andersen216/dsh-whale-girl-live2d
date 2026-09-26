@@ -111,7 +111,7 @@ extension AppDelegate {
         w.isOpaque = false
         w.backgroundColor = .clear
         w.hasShadow = true                    // 窗口阴影跟着圆形 alpha 走，正好是球的光晕
-        w.level = .floating
+        w.level = .statusBar          // 抬到普通窗口之上，免得被别的 App 盖住「看不见了」
         w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         w.isReleasedWhenClosed = false
 
@@ -155,39 +155,30 @@ extension AppDelegate {
     // MARK: - 收起 / 展开（带过渡动画，不再「先卡一下」）
 
     @objc func collapseToBall() {
-        guard let b = ball, !b.isVisible else { return }
+        guard let b = ball else { return }
         savePosition()
-        // 从「她当前所在位置」开始：先原地淡入，再飞向最近的那一边
-        let center = NSPoint(x: win.frame.midX, y: win.frame.midY)
-        b.setFrameOrigin(NSPoint(x: center.x - b.frame.width / 2, y: center.y - b.frame.height / 2))
-        b.alphaValue = 0
+        // 主人要求：**瞬间**出现在**离她最近的那一边**，不要从中间飘过去、也不要先闪一下。
+        // 所以这里一次算好目标位置：比她自己到左右边缘的距离，谁近贴谁；竖直高度跟着她。
+        let vf = (win.screen ?? NSScreen.main)?.visibleFrame
+            ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let dLeft = abs(win.frame.midX - vf.minX)
+        let dRight = abs(vf.maxX - win.frame.midX)
+        let x = (dLeft <= dRight) ? vf.minX + 4 : vf.maxX - b.frame.width - 4
+        let y = min(max(win.frame.midY - b.frame.height / 2, vf.minY + 4), vf.maxY - b.frame.height - 4)
+        b.setFrameOrigin(NSPoint(x: x, y: y))
+        b.alphaValue = 1
         b.orderFrontRegardless()
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.18
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            self.win.animator().alphaValue = 0
-            b.animator().alphaValue = 1
-        } completionHandler: { [weak self] in
-            self?.win.orderOut(nil)
-            self?.win.alphaValue = 1
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in self?.snapBall(animated: true) }
-        log("已收起成小球")
+        win.orderOut(nil)
+        UserDefaults.standard.set(Double(x), forKey: "ball.x")
+        UserDefaults.standard.set(Double(y), forKey: "ball.y")
+        log("已收起成小球 → 贴" + (dLeft <= dRight ? "左" : "右") + "边 (\(Int(x)),\(Int(y))) 可见=\(b.isVisible)")
     }
 
     @objc func expandFromBall() {
-        guard let b = ball, b.isVisible else { return }
-        win.alphaValue = 0
+        guard let b = ball else { return }
+        b.orderOut(nil)
+        win.alphaValue = 1
         win.orderFrontRegardless()
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.18
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            b.animator().alphaValue = 0
-            self.win.animator().alphaValue = 1
-        } completionHandler: { [weak self] in
-            self?.ball?.orderOut(nil)
-            self?.ball?.alphaValue = 1
-        }
         web.evaluateJavaScript("window.DSHPet && DSHPet.setHidden && DSHPet.setHidden(false)",
                                completionHandler: nil)
         log("已展开桌宠")
@@ -251,7 +242,11 @@ extension AppDelegate {
             [weak self] v, _ in
             guard let self else { return }
             let hidden = (v as? Bool) ?? false
-            if hidden && !b.isVisible && self.win.isVisible { self.collapseToBall() }
+            if hidden && !b.isVisible {
+                // 两种情况都要把球叫回来：① 主窗口还开着（用户刚点了隐藏）
+                // ② 两个窗口都不见了（主人报的「缩小以后球也没了，不知道去哪找」）
+                self.collapseToBall()
+            }
         }
     }
 }
