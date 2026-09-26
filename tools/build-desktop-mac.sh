@@ -1,0 +1,71 @@
+#!/bin/bash
+# 编译 / 打包 macOS 原生桌宠壳（方案 A）
+#
+#   bash tools/build-desktop-mac.sh            # 编译 → dist/desktop/DS 鲸鱼娘桌宠.app
+#   bash tools/build-desktop-mac.sh --run      # 编译完直接打开
+#   bash tools/build-desktop-mac.sh --kill     # 关掉正在跑的桌宠
+#
+# 只依赖系统自带的 Swift（Xcode Command Line Tools），不需要 Xcode、不需要 npm 装东西。
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SRC="$ROOT/desktop/macos/main.swift"
+PLIST="$ROOT/desktop/macos/Info.plist"
+APP="$ROOT/dist/desktop/DS 鲸鱼娘桌宠.app"
+BIN="WhaleGirlPet"
+BUNDLE_ID="com.andersen216.dsh.whalegirlpet"
+
+if [ "${1:-}" = "--kill" ]; then
+  pkill -f "$BIN" 2>/dev/null && echo "已关掉桌宠" || echo "桌宠没在跑"
+  exit 0
+fi
+
+echo "① 准备 App 骨架：$APP"
+rm -rf "$APP"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+cp "$PLIST" "$APP/Contents/Info.plist"
+printf 'APPL????' > "$APP/Contents/PkgInfo"
+
+echo "② 编译（swiftc，只有系统框架）"
+swiftc -O -swift-version 5 \
+  -target "$(uname -m)-apple-macos13.0" \
+  -framework Cocoa -framework WebKit \
+  -o "$APP/Contents/MacOS/$BIN" "$SRC"
+
+echo "③ 图标（用插件里那张模型图标，没有就跳过）"
+ICON="$ROOT/assets/model/icon.png"
+if [ -f "$ICON" ] && command -v sips >/dev/null; then
+  TMP="$(mktemp -d)"
+  for s in 16 32 64 128 256 512; do
+    sips -z $s $s "$ICON" --out "$TMP/icon_${s}.png" >/dev/null 2>&1 || true
+  done
+  # 生成 .icns（iconutil 要求 iconset 目录结构）
+  SET="$TMP/icon.iconset"; mkdir -p "$SET"
+  cp "$TMP/icon_16.png"  "$SET/icon_16x16.png"      2>/dev/null || true
+  cp "$TMP/icon_32.png"  "$SET/icon_16x16@2x.png"   2>/dev/null || true
+  cp "$TMP/icon_32.png"  "$SET/icon_32x32.png"      2>/dev/null || true
+  cp "$TMP/icon_64.png"  "$SET/icon_32x32@2x.png"   2>/dev/null || true
+  cp "$TMP/icon_128.png" "$SET/icon_128x128.png"    2>/dev/null || true
+  cp "$TMP/icon_256.png" "$SET/icon_128x128@2x.png" 2>/dev/null || true
+  cp "$TMP/icon_256.png" "$SET/icon_256x256.png"    2>/dev/null || true
+  cp "$TMP/icon_512.png" "$SET/icon_256x256@2x.png" 2>/dev/null || true
+  cp "$TMP/icon_512.png" "$SET/icon_512x512.png"    2>/dev/null || true
+  iconutil -c icns "$SET" -o "$APP/Contents/Resources/icon.icns" 2>/dev/null \
+    && echo "   ✓ 图标已生成" || echo "   · 图标生成失败，用默认图标"
+  rm -rf "$TMP"
+fi
+
+echo "④ 临时签名（本机自己编译的，不需要开发者证书）"
+codesign --force --sign - --identifier "$BUNDLE_ID" "$APP" 2>/dev/null \
+  && echo "   ✓ 已签名" || echo "   · 跳过签名"
+
+echo
+echo "完成：$APP"
+du -sh "$APP" | awk '{print "体积：" $1}'
+
+if [ "${1:-}" = "--run" ]; then
+  echo "启动中…（菜单栏会出现一个 🐋 图标，从那里可以重新加载 / 退出）"
+  pkill -f "$BIN" 2>/dev/null || true
+  sleep 0.4
+  open "$APP"
+fi
