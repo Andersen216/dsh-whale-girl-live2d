@@ -54,6 +54,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     var hiddenWatch: Timer?
     var launchedAt = Date()
     var failCount = 0
+    var lastLogText = ""
+    var lastLogAt = Date.distantPast
 
     var inside = false          // 鼠标当前是不是压在她（或她的面板）身上
     var downAt = NSPoint.zero   // 按下时的鼠标位置（屏幕坐标）
@@ -68,6 +70,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         // 关键：别让 macOS 把「没人操作的透明窗口」判成 App Nap 而掐掉 requestAnimationFrame。
         // 被掐的症状极隐蔽：页面不报错、模型数据也加载了，但 rAF 永不触发 →
         // 前端启动流程停在「等一帧」那一步，于是既画不出她、也连不上事件流。
+        // 日志超过 2MB 就滚掉，别让它无限长大
+        let logPath = NSHomeDirectory() + "/.dsh/whalegirlpet.log"
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: logPath),
+           let size = attrs[.size] as? Int, size > 2_000_000 {
+            try? FileManager.default.removeItem(atPath: logPath)
+        }
         beginAwake()
         makeWindow()
         makeWeb()
@@ -372,11 +380,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         guard message.name == "dshpetshell" else { return }
         // 前端 → 壳子的即时指令。走消息而不是轮询页面状态：
         // 点「收起」立刻开始动画，没有 0.5 秒的延迟感。
+        // ⚠️ 防回环守卫（踩过大坑）：expandFromBall() 会调用页面的 setHidden(false)，
+        // 页面又会回一条 "shown" —— 没有守卫就是无限递归：
+        // 日志里出现过 **5472 万条「已展开桌宠」**，CPU 打满、收起按钮完全失效。
+        // 规矩：只在「状态确实需要改变」时才动。
         switch String(describing: message.body) {
-        case "hidden", "collapse": collapseToBall()
-        case "shown", "expand": expandFromBall()
-        case "quit": quitNow()
-        default: log("壳子收到未知指令：\(message.body)")
+        case "hidden", "collapse":
+            guard win.isVisible else { return }          // 已经是收起态 → 忽略
+            collapseToBall()
+        case "shown", "expand":
+            guard ball?.isVisible == true else { return } // 已经是展开态 → 忽略
+            expandFromBall()
+        case "quit":
+            quitNow()
+        default:
+            log("壳子收到未知指令：\(message.body)")
         }
     }
 
@@ -623,7 +641,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     /// 日志同时进 stderr 和 ~/.dsh/whalegirlpet.log，出问题时能直接看
     func log(_ s: String) {
-        let line = "[\(Date().formatted(date: .omitted, time: .standard))] \(s)\n"
+        // 同一条消息 1 秒内只记一次：万一又出现循环，日志不会炸成几十万行
+        let now = Date()
+        if s == lastLogText && now.timeIntervalSince(lastLogAt) < 1 { return }
+        lastLogText = s
+        lastLogAt = now
+        let line = "[\(now.formatted(date: .omitted, time: .standard))] \(s)\n"
         FileHandle.standardError.write(line.data(using: .utf8)!)
         let path = NSHomeDirectory() + "/.dsh/whalegirlpet.log"
         if let h = FileHandle(forWritingAtPath: path) {
