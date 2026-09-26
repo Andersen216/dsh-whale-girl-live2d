@@ -44,7 +44,11 @@ description: Driving guide for the dsh-whale-girl-live2d desktop pet (DS 鲸鱼�
 ### 命令行（首选，最省事）
 
 ```bash
-PET="node '/Users/andersen/DSH Workplace/dsh-live2d-pet/tools/pet-ctl.mjs'"
+# 插件在哪儿都能这样定位：不管是从 GitHub / npm 装的，还是本地 link 装的，
+# profile 的 node_modules 下都会有这个包名对应的目录
+PET_DIR="$HOME/.dsh/profiles/web/node_modules/dsh-whale-girl-live2d"
+PET="node \"$PET_DIR/tools/pet-ctl.mjs\""
+
 $PET status                     # 先确认在线
 $PET mood happy                 # 换情绪
 $PET expr 星星眼                 # 直接指定表情
@@ -123,8 +127,8 @@ agent 事件、或者用户再点一个）都会把它顶掉。**不要**用 `se
    那一页会列出：运行时是否加载、模型原始尺寸、取景结果、可用表情/动作、被过滤的参数。
    让用户截图这一页，比猜快得多。
 2. **完全没出现** → 插件没被加载。检查三件事：
-   - `~/.dsh/profiles/web/package.json` 的 `dsh.profile.bundles` 里有 `dsh-live2d-pet`
-   - `~/.dsh/profiles/web/node_modules/dsh-live2d-pet` 是指向本工作区的软链
+   - `~/.dsh/profiles/web/package.json` 的 `dsh.profile.bundles` 里有 `dsh-whale-girl-live2d`
+   - `~/.dsh/profiles/web/node_modules/dsh-whale-girl-live2d` 存在（本地开发装法是软链到 clone 的目录）
    - **DSH Web 重启过**（新增 bundle 必须重启才加载）
 3. **出现了但不动** → 打开 `/dsh-pet/state` 看 `clients` 是不是 0（SSE 没连上），
    以及 `sessionId` 是不是空（还没在这个会话里说过话——桌宠只跟「人正在用的会话」联动）。

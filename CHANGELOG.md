@@ -2,6 +2,17 @@
 
 ## 0.3.3 — 2026-09-25
 
+> **English summary / 英文摘要**
+>
+> Fixed the eyes being frozen **closed** — a regression introduced in 0.3.2. The framework's
+> `getParameterDefaultValue()` takes an *index*, not a parameter id; passing an id returned `undefined`, the
+> fallback treated it as `0`, and the eye-open parameter was written as 0 and snapshotted for good. Ids are now
+> converted to indices and skipped when unknown, plus a self-heal that restores the default when the eyes stay
+> closed for 1.5 s with nobody claiming them. Blinking now runs on a natural schedule (every 2.6–5.4 s,
+> ~0.19 s per blink, 15% double blinks, none while a motion or an eye-controlling expression is active).
+> Bubbles, menus, the wallet and the composer are anchored to the top of her head (0–1 px off centre, pushed
+> inside the viewport near a wall). Tests: 159 static + 99 in-browser, all green.
+
 ### 修：眼睛被永久冻成「闭着」（0.3.2 引入的，我的错）
 
 0.3.2 里我加了「停动作时把参数复位到默认值」，但框架的 `getParameterDefaultValue(t)`
@@ -25,6 +36,15 @@
 
 
 ## 0.3.2 — 2026-09-25
+
+> **English summary / 英文摘要**
+>
+> Two real bugs. **(1)** After using the omurice action it stayed on the desk forever, even after a
+> reset: the framework snapshots parameters *after* motions write them, so a stopped motion's last frame was
+> reloaded every frame. Stopping a motion now resets those parameters to the model defaults and re-saves the
+> snapshot — the same fix covers phones and expressions that would not go away. **(2)** Popups opened left one
+> time and right the next and were half-clipped at a wall; positioning is pure computation now. Also: the Speak
+> button became a toggle, and dragging can no longer clip the bottom toolbar.
 
 ### 「蛋包饭永远挂着」的根因修掉了（真 bug，藏在框架里）
 
@@ -52,6 +72,13 @@ pixi-live2d-display 每帧的顺序是：动作写入 → `saveParameters()` 存
 
 ## 0.3.1 — 2026-09-25
 
+> **English summary / 英文摘要**
+>
+> All of these were reported by users: snapping is **side-only** (the vertical position stays exactly
+> where you put her), the composer only opens from the Speak button (double-clicking the model no longer opens
+> it), the wallet's × closes the wallet instead of the menu, right-click toggles it, and a freely-dropped pet is
+> no longer pulled back to the wall after a reload.
+
 ### 交互修正（都是主人报的）
 
 - **输入框不再乱弹**：以前双击模型会弹出输入框，现在只有点工具栏「说话」才开；
@@ -65,6 +92,14 @@ pixi-live2d-display 每帧的顺序是：动作写入 → `saveParameters()` 存
 
 
 ## 0.3.0 — 2026-09-25
+
+> **English summary / 英文摘要**
+>
+> New: **right-click opens a wallet HUD** — remaining balance (DeepSeek's official `user/balance`
+> endpoint), this turn's cost (auto-popped when a turn ends: money + tokens), today's total, peak hours in red /
+> off-peak in green, and a countdown to the next price change. The accounting is computed inside the host and
+> does **not** depend on `dsh-whale-widget`. The HUD never fights the chat for screen space. Host-side changes
+> need a DSH restart.
 
 ### 右键 = 钱包 HUD（余额 / 本轮消耗 / 峰谷计价）
 
@@ -81,6 +116,14 @@ pixi-live2d-display 每帧的顺序是：动作写入 → `saveParameters()` 存
 
 
 ## 0.2.0 — 2026-09-25
+
+> **English summary / 英文摘要**
+>
+> First release: the Live2D whale girl as a desktop pet inside the DeepSeek Harness Web UI. A
+> four-tab menu — expressions / accessories / scenes / actions, with temporary / persistent / persistent /
+> one-shot lifetimes — every one of them mapped from the original model author's 52-hotkey sheet. One-click
+> reset, and she no longer gets angry from casual clicking. Code MIT © 2026 Andersen216; artwork
+> CC BY-NC-SA 4.0, non-commercial, credited to 上善无形 / ZipZipPipe / 氵六青.
 
 这一版把「菜单里点了没用」「工作模式卡死」「老是生气」这几个体验问题集中修掉了，
 并且**把动作表整个换成原作者自己的按键表**。

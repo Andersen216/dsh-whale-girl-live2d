@@ -19,27 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-NOTE: This license covers the CODE in this repository only. The artwork and the
-Live2D runtime bundled under assets/ are NOT covered by it — see PROVENANCE.md
-for the per-file terms.
-
-注意：本许可只覆盖本项目的代码。assets/ 下的美术素材与 Live2D 运行时不适用 MIT，
-逐项条款见 PROVENANCE.md。
-
----
-
-许可分层（中文速览）：
-
-- **代码**（`lib/`、`tools/`、`cordis.patch.yml`）：MIT，Copyright © 2026 **Andersen216**。
-- **美术素材**（`assets/model/**`：moc3 / 贴图 / 表情 / 动作）：**不适用 MIT**，
-  按 **CC BY-NC-SA 4.0（署名 — 非商业性使用 — 相同方式共享）** 使用。
-  素材版权归 **上善无形 / ZipZipPipe / 氵六青** 三位所有。
-- **本项目整体非商业**：不收费、不带货、不接广告变现、不卖周边、
-  不作为任何付费产品或服务的卖点。
-- Live2D Cubism Core 归 Live2D Inc.，按 Live2D 许可条款使用；
-  PIXI.js 与 pixi-live2d-display 为 MIT。
-
-详见 AUTHORS.md 与 PROVENANCE.md。
