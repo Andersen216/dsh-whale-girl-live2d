@@ -25,6 +25,7 @@
     "CHANGELOG.md",
     "AUTHORS.md",
     "PROVENANCE.md",
+    "NOTICE.md",
     "LICENSE"
   ],
   "bin": {
