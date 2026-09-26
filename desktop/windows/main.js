@@ -21,8 +21,9 @@ const { exec } = require('node:child_process')
 const PET_URL = 'http://127.0.0.1:3080/dsh-pet/standalone'
 const ORIGIN = 'http://127.0.0.1:3080'
 const PLUGIN = 'github:Andersen216/dsh-whale-girl-live2d'
-const WIN_W = 560
-const WIN_H = 620
+// 同 macOS：窗口要装得下她 + 四周的面板（透明区域点击穿透，不挡别的窗口）
+const WIN_W = 900
+const WIN_H = 760
 const BALL = 62
 const TOKEN_FILE = path.join(os.homedir(), '.dsh', 'dsh-live2d-pet-desktop.json')
 
