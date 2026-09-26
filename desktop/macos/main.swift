@@ -58,6 +58,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     var lastLogAt = Date.distantPast
 
     var inside = false          // 鼠标当前是不是压在她（或她的面板）身上
+    var overPanel = false       // 鼠标当前在不在她的面板上（面板里的拖动要交给网页）
+    var panelGesture = false    // 这一次按下是发生在面板里（别抢它的拖动）
     var downAt = NSPoint.zero   // 按下时的鼠标位置（屏幕坐标）
     var winAt = NSPoint.zero    // 按下时的窗口位置
     var moved: CGFloat = 0      // 这次按下总共挪了多少像素
@@ -231,6 +233,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             winAt = win.frame.origin
             moved = 0
             shellDrag = false
+            panelGesture = overPanel
             // 点她 = 想跟她说话：把 App 激活、窗口变 key、焦点交给网页，
             // 否则无边框窗口收不到键盘事件（「能点但打不了字」就是这么来的）
             NSApp.activate(ignoringOtherApps: true)
@@ -243,6 +246,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             return e
 
         case .leftMouseDragged:
+            // 在面板里按下 → 这是网页自己的拖动（拖滑块、选文字），一律放行。
+            // 之前不分青红皂白把拖动都当「拖窗口」吃掉，结果设置里的滑块拖不动。
+            if panelGesture { return e }
             let m = NSEvent.mouseLocation
             let dx = m.x - downAt.x, dy = m.y - downAt.y
             moved = max(moved, abs(dx) + abs(dy))
@@ -261,6 +267,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             return e
 
         case .leftMouseUp:
+            panelGesture = false
             if shellDrag {
                 shellDrag = false
                 NSCursor.pop()
@@ -280,18 +287,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     /// 这行 JS 决定「鼠标这个位置算不算在她身上」：
     /// ① 模型本体：用页面自己的 alpha 掩码命中判定
     /// ② 她的面板：气泡 / 菜单 / 钱包 / 输入框 / 工具条（不然那些点不动）
+    /// 这行 JS 回答两个问题：鼠标下面是不是「她」、是不是「她的面板」。
+    ///   panel = 面板/工具栏/气泡/输入框（有滑块、按钮，拖动要交给网页）
+    ///   model = 她模型本体（拖动 = 拖窗口，点击 = 摸头）
+    ///   none  = 空白处（点击穿透到桌面）
     let hitJS = """
     (function(){try{
       var x=__X__, y=__Y__;
-      if(window.DSHPet && DSHPet.hitTest && DSHPet.hitTest(x,y)) return true;
       var el=document.elementFromPoint(x,y);
-      if(!el || el===document.body || el===document.documentElement) return false;
-      if(el.tagName==='CANVAS') return false;
-      // 她自己的 DOM：凡是能被 elementFromPoint 返回的元素都是可交互的
-      //（透明容器一律 pointer-events:none，压根不会被返回）。
-      // 之前写死类名白名单，漏了恢复用的把手 .dshp-tab —— 结果一收起就再也点不回来。
-      return !!el.closest('.dshp-root, .dshp-tab, [class*="dshp-"]');
-    }catch(e){return false}})()
+      var ui = !!(el && el.closest && el.closest('.dshp-panel,.dshp-menu,.dshp-hud,.dshp-bubble,.dshp-composer,.dshp-dock,.dshp-tab'));
+      if (ui) return 'panel';
+      if (window.DSHPet && DSHPet.hitTest && DSHPet.hitTest(x,y)) return 'model';
+      return 'none';
+    }catch(e){return 'none'}})()
     """
 
     func updateHit() {
@@ -304,8 +312,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let js = hitJS.replacingOccurrences(of: "__X__", with: String(format: "%.1f", x))
                        .replacingOccurrences(of: "__Y__", with: String(format: "%.1f", y))
         web.evaluateJavaScript(js) { [weak self] v, _ in
-            let on = (v as? Bool) ?? ((v as? NSNumber)?.boolValue ?? false)
-            self?.setInside(on)
+            guard let self else { return }
+            let kind = (v as? String) ?? "none"
+            self.overPanel = (kind == "panel")
+            let on = (kind != "none") || ((v as? Bool) ?? false)
+            self.setInside(on)
         }
     }
 
@@ -391,6 +402,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case "shown", "expand":
             guard ball?.isVisible == true else { return } // 已经是展开态 → 忽略
             expandFromBall()
+        case "open-dsh":
+            // 前端那个 ↗ 符号：用默认浏览器打开 DeepSeek Harness 界面
+            if let u = URL(string: "http://127.0.0.1:3080/") { NSWorkspace.shared.open(u) }
+            log("已用浏览器打开 DSH 界面")
         case "quit":
             quitNow()
         default:

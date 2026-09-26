@@ -578,15 +578,21 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    三个按钮被挤成 104px，文字折行后每个都变成又窄又高的方块。
    width:max-content 让它超出那半幅也能保持居中，按钮就恢复成正常的一行小按钮。 */
 .dshp-dock{position:absolute;left:50%;transform:translateX(-50%);
-  bottom:calc(-27px * var(--dshp-ds));display:flex;gap:calc(4px * var(--dshp-ds));
+  bottom:calc(-40px * var(--dshp-ds));display:flex;gap:calc(7px * var(--dshp-ds));
   width:max-content;white-space:nowrap;
-  pointer-events:auto;opacity:0;transition:opacity .18s ease}
+  pointer-events:auto;opacity:0;transition:opacity .22s ease}
 .dshp-root.dshp-hover .dshp-dock,.dshp-root.dshp-open .dshp-dock{opacity:1}
 .dshp-btn{border:1px solid var(--dshp-line);background:var(--dshp-bg);color:var(--dshp-fg);
-  border-radius:calc(8px * var(--dshp-ds));flex:0 0 auto;white-space:nowrap;
-  padding:calc(2px * var(--dshp-ds)) calc(7px * var(--dshp-ds));
-  font-size:calc(11px * var(--dshp-ds));cursor:pointer;line-height:1.5;
+  border-radius:calc(11px * var(--dshp-ds));flex:0 0 auto;white-space:nowrap;
+  padding:calc(5px * var(--dshp-ds)) calc(11px * var(--dshp-ds));
+  font-size:calc(13px * var(--dshp-ds));cursor:pointer;line-height:1.5;
   box-shadow:0 3px 10px rgba(10,14,30,.14);transition:transform .12s ease}
+/* 纯符号按钮（打开 DSH / 收起）：正方形一点，只放一个符号 */
+.dshp-btn.dshp-icon{padding:calc(5px * var(--dshp-ds)) calc(9px * var(--dshp-ds));
+  font-size:calc(15px * var(--dshp-ds));line-height:1.2}
+/* 大小加减键 */
+.dshp-btn.dshp-step{min-width:calc(30px * var(--dshp-ds));text-align:center;
+  font-size:calc(17px * var(--dshp-ds));font-weight:600;line-height:1.1}
 .dshp-btn:hover{transform:translateY(-1px)}
 .dshp-btn:active{transform:translateY(0) scale(.96)}
 .dshp-btn:disabled{opacity:.5;cursor:default}
@@ -1975,6 +1981,27 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return mask.grid[my * mask.w + mx] === 1
   }
 
+  /**
+   * 鼠标是不是在「她下方那排按钮」上（含一点外扩的容错）。
+   * 这三个键不在模型掩码里，只靠 hitTest 会让它们一出现就消失、根本点不着。
+   */
+  function overDock(clientX, clientY) {
+    try {
+      if (!ui || !ui.dock) return false
+      const r = ui.dock.getBoundingClientRect()
+      if (!r.width || !r.height) return false
+      const pad = 12
+      return (
+        clientX >= r.left - pad &&
+        clientX <= r.right + pad &&
+        clientY >= r.top - pad &&
+        clientY <= r.bottom + pad
+      )
+    } catch (err) {
+      return false
+    }
+  }
+
   // ——————————————————————————————————————————————————————————————
   // 六点五、视线控制器
   // ——————————————————————————————————————————————————————————————
@@ -2250,7 +2277,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const talkBtn = $('button', 'dshp-btn dshp-primary', '💬 说话')
     const menuBtn = $('button', 'dshp-btn', '⋯')
     const hideBtn = $('button', 'dshp-btn', '–')
-    dock.append(talkBtn, menuBtn, hideBtn)
+    hideBtn.title = '收起（桌面版会缩成贴边小球）'
+    // 主人要的：一键打开 DeepSeek Harness，纯符号不写字
+    const openBtn = $('button', 'dshp-btn dshp-icon', '↗')
+    openBtn.title = '打开 DeepSeek Harness 界面'
+    dock.append(talkBtn, menuBtn, hideBtn, openBtn)
 
     const composer = $('div', 'dshp-panel dshp-composer')
     const ta = $('textarea')
@@ -2396,7 +2427,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       'pointermove',
       (e) => {
         if (!dragging) {
-          const on = hitTest(e.clientX, e.clientY)
+          // 主人反馈：「我鼠标往下走要去点那三个键，一离开她身上它们就消失了，点不着」。
+          // 原因：原来只认 hitTest（她模型身上），而工具栏在她**下方**、不在模型掩码里。
+          // 现在把「鼠标在工具栏矩形内」也算作悬停，并且离开后多留 900ms。
+          const on = hitTest(e.clientX, e.clientY) || overDock(e.clientX, e.clientY)
           if (on) {
             root.classList.add('dshp-hover')
             if (leaveTimer) {
@@ -2407,7 +2441,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
             leaveTimer = setTimeout(() => {
               leaveTimer = null
               if (!root.classList.contains('dshp-open')) root.classList.remove('dshp-hover')
-            }, 240)
+            }, 900)
           }
         } else if (start) {
           const dx = e.clientX - start.mx
@@ -3442,6 +3476,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       closePanels()
       setHidden(true)
     })
+    // 第 4 个：打开 DeepSeek Harness。桌面壳里交给原生用默认浏览器打开，
+    // 浏览器版直接新开一个标签页。
+    u.dock.children[3].addEventListener('click', () => {
+      if (shell.on) shell.post('open-dsh')
+      else window.open(BASE.replace(/\/dsh-pet$/, '') + '/', '_blank')
+    })
   }
 
   function renderPane(id) {
@@ -3573,7 +3613,31 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     range.min = '150'
     range.max = '720'
     range.value = String(clamp(Number(readLayout().height) || CFG.height, 150, 720))
-    range.title = '按住拖动'
+    range.title = '也可以直接拖（点 − / + 更省事）'
+    // 主人要求：大小主要用「加 / 减」点一下调，不要只能拖滑块
+    const stepSize = (delta) => {
+      const next = clamp(Number(range.value) + delta, 150, 720)
+      range.value = String(next)
+      sizeOut.textContent = next + 'px'
+      fitModel(next)
+      saveLayout({ height: next })
+      clampPanels()
+    }
+    const mkStep = (txt, delta) => {
+      const b = $('button', 'dshp-btn dshp-step', txt)
+      b.title = (delta > 0 ? '放大' : '缩小') + '（每下 ' + Math.abs(delta) + 'px）'
+      b.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        stepSize(delta)
+      })
+      return b
+    }
+    const sizeOut = $('span', null, range.value + 'px')
+    sizeOut.style.minWidth = '46px'
+    sizeOut.style.fontVariantNumeric = 'tabular-nums'
+    const stepRow = $('div', 'dshp-row')
+    stepRow.append(mkStep('−', -20), sizeOut, mkStep('+', 20))
     // 拖的时候冻住 UI 缩放（见 sizingSize），松手再让面板跟上新尺寸——
     // 这样滑块轨道全程钉在原地，可以一路拖到底。
     const beginSize = () => {
@@ -3595,12 +3659,14 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     range.addEventListener('keydown', beginSize)
     range.addEventListener('keyup', endSize)
     range.addEventListener('input', () => {
+      sizeOut.textContent = Number(range.value) + 'px'
       fitModel(Number(range.value))
       saveLayout({ height: Number(range.value) })
       if (!sizingSize) clampPanels()
     })
     label.appendChild(range)
     box.appendChild(label)
+    box.appendChild(stepRow)
 
     // 视线灵敏度：实时生效，直接写进 CFG
     const g0 = gazeCfg()
