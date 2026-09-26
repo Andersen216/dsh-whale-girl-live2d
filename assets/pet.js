@@ -536,14 +536,15 @@
   /* 工具栏（底下三个按钮）比模型再小一号，主人说原来那三框太大 */
   --dshp-ds:0.86;
   font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
-  --dshp-fg:#1f2430;--dshp-bg:rgba(255,255,255,.95);--dshp-line:rgba(20,24,40,.12);
-  --dshp-accent:#7c5cff;--dshp-radius:14px;transition:opacity .25s ease}
+  --dshp-fg:#132043;--dshp-bg:rgba(246,249,255,.96);--dshp-line:rgba(30,60,130,.14);
+  /* 鲸鱼蓝（和官网、App 图标同一套色）；只改颜色，别的一律不动 */
+  --dshp-accent:#3b62f6;--dshp-radius:14px;transition:opacity .25s ease}
 .dshp-root.dshp-hidden{opacity:0;pointer-events:none!important}
 /* 恢复用的把手挂在 body 上、不在 .dshp-root 里，所以这里必须是 body 级类：
    用后代选择器会永远匹配不到，隐藏之后就再也找不回来了。 */
 body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-tab:hover{transform:translateY(-1px)}
-@media (prefers-color-scheme:dark){.dshp-root{--dshp-fg:#eef1f8;--dshp-bg:rgba(28,30,40,.95);--dshp-line:rgba(255,255,255,.14)}}
+@media (prefers-color-scheme:dark){.dshp-root{--dshp-fg:#eaf0ff;--dshp-bg:rgba(18,26,48,.95);--dshp-line:rgba(140,175,255,.20);--dshp-accent:#7b9bff}}
 .dshp-stage{position:absolute;left:0;bottom:0;pointer-events:none;
   filter:drop-shadow(0 10px 20px rgba(0,0,0,.24))}
 .dshp-stage canvas{display:block;pointer-events:none}

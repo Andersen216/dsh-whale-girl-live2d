@@ -302,7 +302,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
       var x=__X__, y=__Y__;
       var el=document.elementFromPoint(x,y);
       var ui = !!(el && el.closest && el.closest('.dshp-panel,.dshp-menu,.dshp-hud,.dshp-bubble,.dshp-composer,.dshp-dock,.dshp-tab'));
-      if (ui) return 'panel';
+      if (ui) {
+        // 只有面板里真正的控件（滑块/按钮/输入框）才把拖动让给网页；
+        // 面板的空白处按「她」处理 —— 否则点她头顶附近会判成面板，
+        // 壳子就放弃拖窗口，于是只能在页面视口里挪（主人报的「拖不到屏幕上半部分」）。
+        var ctl = el.closest && el.closest('input,textarea,button,select,a,[contenteditable],.dshp-dock');
+        return ctl ? 'panel' : 'model';
+      }
       if (window.DSHPet && DSHPet.hitTest && DSHPet.hitTest(x,y)) return 'model';
       return 'none';
     }catch(e){return 'none'}})()
