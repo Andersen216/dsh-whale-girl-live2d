@@ -310,6 +310,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func updateHit() {
         if !win.isVisible { return }        // 收起成小球时主窗口不在屏幕上，没必要探
+        // ⚠️ 拖动期间必须冻结探针：探针每 90ms 会把 ignoresMouseEvents 设成
+        // 「鼠标不在她身上就穿透」。而拖动时鼠标**必然**会离开她身体 → 窗口立刻变成穿透 →
+        // 拖动事件断掉 → 表现就是「只能在桌面的一小块区域里拖、拖不出去」。
+        if shellDrag || panelGesture { return }
         let m = NSEvent.mouseLocation
         let f = win.frame
         if !f.contains(m) { setInside(false); return }

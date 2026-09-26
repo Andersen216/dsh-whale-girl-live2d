@@ -95,7 +95,7 @@ async function poll() {
     setIgnore(true)
     return
   }
-  if (dragTimer) return // 拖动中不抢事件
+  if (dragTimer) return // 拖动中不抢事件（否则鼠标一离开她就变穿透，拖动会断）
   try {
     const kind = await win.webContents.executeJavaScript(hitJS(Math.round(p.x - b.x), Math.round(p.y - b.y)))
     lastHit = kind
