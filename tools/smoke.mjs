@@ -795,9 +795,8 @@ async function main() {
     const alignLeft = headAlign[0] || {}
     const alignRight = headAlign[2] || {}
     check(
-      // 主人最终要求：聊天框回到「她正头顶居中」，但要完整显示
-      '在屏幕中间时，聊天框在她头顶居中且完整',
-      alignMid.offBy !== undefined && alignMid.offBy <= 30 && alignMid.inside === true,
+      '在屏幕中间时，聊天框正对她的头顶',
+      alignMid.offBy !== undefined && alignMid.offBy <= 30,
       JSON.stringify(alignMid),
     )
     check('聊天框在三种位置都完整落在屏幕里（不会被墙切掉）', headAlign.every((p) => p.inside === true), JSON.stringify(headAlign))

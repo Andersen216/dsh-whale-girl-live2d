@@ -528,26 +528,6 @@
   // 写成 "[object CSS]"（12 个字符），整个界面静默失去定位与外观。踩过一次。
 
   const PET_CSS = `
-/* ——— 设置：独立的小弹窗（居中、有自己的标题栏和关闭键，不再挂在她身上） ——— */
-.dshp-menu.dshp-modal{width:min(430px, calc(100vw - 32px))!important;
-  max-height:calc(100vh - 40px)!important;overflow:hidden}
-.dshp-menu.dshp-modal .dshp-tabs{background:var(--dshp-accent-soft);border-radius:12px 12px 0 0;
-  padding:8px 10px;margin:-2px -2px 6px}
-
-/* ——— 说话框：做成带小尖儿的气泡（尖儿指向她）、字号小一点、一行能显示全 ——— */
-.dshp-composer{width:min(420px, calc(100vw - 40px))}
-.dshp-composer::after{content:'';position:absolute;left:50%;bottom:-8px;margin-left:-8px;
-  width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;
-  border-top:9px solid var(--dshp-bg);pointer-events:none;filter:drop-shadow(0 2px 2px rgba(0,0,0,.10))}
-.dshp-composer textarea{font-size:12px!important;line-height:1.5!important;min-height:42px!important;
-  white-space:pre;overflow-x:auto}
-.dshp-composer .dshp-hint{font-size:11px;line-height:1.5}
-/* ——— 设置页：独立居中的弹窗（不再挂在她身上，避免挡住她/被窗口裁掉） ——— */
-.dshp-menu.dshp-modal{left:50%!important;top:50%!important;right:auto!important;bottom:auto!important;
-  transform:translate(-50%,-50%)!important;
-  --dshp-shift:0px!important;--dshp-shift-y:0px!important;
-  box-shadow:0 24px 60px rgba(6,12,32,.42)}
-
 .dshp-root{position:fixed;z-index:2147483000;pointer-events:none;
   --dshp-s:1;
   /* 面板单独一套缩放：气泡和工具栏可以跟着模型缩得很小，但菜单里有滑块、
@@ -556,15 +536,14 @@
   /* 工具栏（底下三个按钮）比模型再小一号，主人说原来那三框太大 */
   --dshp-ds:0.86;
   font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
-  --dshp-fg:#132043;--dshp-bg:rgba(246,249,255,.96);--dshp-line:rgba(30,60,130,.14);
-  /* 统一成鲸鱼蓝（和官网、App 图标同一套色） */
-  --dshp-accent:#3b62f6;--dshp-accent-soft:rgba(59,98,246,.14);--dshp-radius:14px;transition:opacity .25s ease}
+  --dshp-fg:#1f2430;--dshp-bg:rgba(255,255,255,.95);--dshp-line:rgba(20,24,40,.12);
+  --dshp-accent:#7c5cff;--dshp-radius:14px;transition:opacity .25s ease}
 .dshp-root.dshp-hidden{opacity:0;pointer-events:none!important}
 /* 恢复用的把手挂在 body 上、不在 .dshp-root 里，所以这里必须是 body 级类：
    用后代选择器会永远匹配不到，隐藏之后就再也找不回来了。 */
 body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-tab:hover{transform:translateY(-1px)}
-@media (prefers-color-scheme:dark){.dshp-root{--dshp-fg:#eaf0ff;--dshp-bg:rgba(18,26,48,.95);--dshp-line:rgba(140,175,255,.20);--dshp-accent:#7b9bff;--dshp-accent-soft:rgba(123,155,255,.18)}}
+@media (prefers-color-scheme:dark){.dshp-root{--dshp-fg:#eef1f8;--dshp-bg:rgba(28,30,40,.95);--dshp-line:rgba(255,255,255,.14)}}
 .dshp-stage{position:absolute;left:0;bottom:0;pointer-events:none;
   filter:drop-shadow(0 10px 20px rgba(0,0,0,.24))}
 .dshp-stage canvas{display:block;pointer-events:none}
@@ -603,16 +582,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   width:max-content;white-space:nowrap;
   pointer-events:auto;opacity:0;transition:opacity .22s ease}
 .dshp-root.dshp-hover .dshp-dock,.dshp-root.dshp-open .dshp-dock{opacity:1}
-/* 面板永远不许比可视区域还高 —— 桌面壳的窗口比整页小，菜单却挺高，
-   超出部分原来直接被窗口裁掉（主人报的「设置一打开就被切、显示不全」）。
-   现在：限高 + 内部滚动；面板本身就是可拖动的（见 makeDraggable）。 */
-/* 限高用「直接给滚动区」的办法，**不要**把面板变成 flex 容器 ——
-   上一版就是那样改的：flex + min-height:0 让菜单内容区塌成 0 高，
-   结果框弹出来了、里面却是空的，看着就像「框不出来」。 */
-.dshp-panes{max-height:calc(100vh - 190px);overflow:auto;overscroll-behavior:contain}
-.dshp-hud{max-height:calc(100vh - 40px);overflow:auto}
-.dshp-bubble{max-height:calc(100vh - 40px);overflow:auto}
-.dshp-free{transition:none!important}
 .dshp-btn{border:1px solid var(--dshp-line);background:var(--dshp-bg);color:var(--dshp-fg);
   border-radius:calc(11px * var(--dshp-ds));flex:0 0 auto;white-space:nowrap;
   padding:calc(5px * var(--dshp-ds)) calc(11px * var(--dshp-ds));
@@ -631,7 +600,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-close{position:absolute;top:5px;right:6px;width:22px;height:22px;line-height:1;
   border:none;border-radius:7px;background:transparent;color:inherit;opacity:.5;
   font-size:15px;cursor:pointer;padding:0}
-.dshp-close:hover{opacity:1;background:var(--dshp-accent-soft)}
+.dshp-close:hover{opacity:1;background:rgba(124,92,255,.14)}
 .dshp-panel{position:absolute;bottom:calc(100% + 10px * var(--dshp-ps));left:50%;
   transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(calc(4px + var(--dshp-shift-y,0px)));
   width:min(calc(320px * var(--dshp-ps)),86vw);pointer-events:auto;
@@ -656,7 +625,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-tabs{display:flex;gap:3px;margin-bottom:7px;border-bottom:1px solid var(--dshp-line);padding-bottom:6px}
 .dshp-tab-btn{border:none;background:transparent;color:inherit;opacity:.6;font:inherit;font-size:11.5px;
   padding:3px 9px;border-radius:7px;cursor:pointer}
-.dshp-tab-btn.dshp-active{opacity:1;background:var(--dshp-accent-soft);color:var(--dshp-accent);font-weight:600}
+.dshp-tab-btn.dshp-active{opacity:1;background:rgba(124,92,255,.14);color:var(--dshp-accent);font-weight:600}
 .dshp-grid{display:flex;flex-wrap:wrap;gap:5px;max-height:210px;overflow:auto;overscroll-behavior:contain}
 .dshp-chip{border:1px solid var(--dshp-line);background:transparent;color:inherit;font:inherit;
   font-size:calc(11.5px * var(--dshp-ps));border-radius:calc(8px * var(--dshp-ps));
@@ -1614,84 +1583,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return r.left + r.width / 2
   }
 
-  /** 面板被拖到哪儿了（按 key 记；拖动过就不再自动归位） */
-  const freePos = Object.assign({}, readLayout().free || {})
-
-  /** 面板有「自由位置」就按它摆；返回 true 表示已接管，不再走自动定位 */
-  function applyFree(panel) {
-    const key = panel.dataset ? panel.dataset.dshpKey : null
-    if (!key || !freePos[key]) return false
-    const w = panel.offsetWidth || 0
-    const h = panel.offsetHeight || 0
-    const x = clamp(freePos[key].x, 2, Math.max(2, window.innerWidth - w - 2))
-    const y = clamp(freePos[key].y, 2, Math.max(2, window.innerHeight - h - 2))
-    panel.style.setProperty('--dshp-shift', '0px')
-    panel.style.setProperty('--dshp-shift-y', '0px')
-    panel.style.left = x + 'px'
-    panel.style.top = y + 'px'
-    panel.style.right = 'auto'
-    panel.style.bottom = 'auto'
-    panel.style.transform = 'none'
-    return true
-  }
-
-  /**
-   * 让面板可以被拖着走（按住标题栏拖），位置记进 layout。
-   * 主人要的：「别老固定在她头顶，我想放哪放哪」；双击标题栏可以恢复自动跟随。
-   */
-  function makeDraggable(panel, handle, key) {
-    if (!panel || !handle) return
-    panel.dataset.dshpKey = key
-    handle.style.cursor = 'grab'
-    handle.title = '按住这里拖动这个框（双击恢复自动跟随）'
-    let from = null
-    handle.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0) return
-      const r = panel.getBoundingClientRect()
-      from = { dx: e.clientX - r.left, dy: e.clientY - r.top }
-      panel.classList.add('dshp-free')
-      try {
-        handle.setPointerCapture(e.pointerId)
-      } catch (err) {}
-      handle.style.cursor = 'grabbing'
-      e.preventDefault()
-      e.stopPropagation()
-    })
-    handle.addEventListener('pointermove', (e) => {
-      if (!from) return
-      const w = panel.offsetWidth
-      const h = panel.offsetHeight
-      freePos[key] = {
-        x: Math.round(clamp(e.clientX - from.dx, 2, Math.max(2, window.innerWidth - w - 2))),
-        y: Math.round(clamp(e.clientY - from.dy, 2, Math.max(2, window.innerHeight - h - 2))),
-      }
-      applyFree(panel)
-    })
-    const stop = () => {
-      if (!from) return
-      from = null
-      handle.style.cursor = 'grab'
-      saveLayout({ free: freePos })
-    }
-    handle.addEventListener('pointerup', stop)
-    handle.addEventListener('pointercancel', stop)
-    handle.addEventListener('dblclick', (e) => {
-      e.preventDefault()
-      e.stopPropagation()
-      delete freePos[key]
-      delete panel.dataset.dshpKey
-      panel.style.left = panel.style.top = panel.style.right = panel.style.bottom = ''
-      panel.style.transform = ''
-      panel.classList.remove('dshp-free')
-      panel.dataset.dshpKey = key
-      saveLayout({ free: freePos })
-      clampPanels()
-    })
-  }
-
   function placePanel(panel) {
     if (!panel) return
-    if (applyFree(panel)) return        // 被拖过就听主人的，别再自动挪
     const vw = window.innerWidth
     const pad = 10
     panel.style.setProperty('--dshp-shift', '0px')
@@ -1702,26 +1595,14 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const anchor = headScreenX() // 对准头顶，而不是整个场景的中心
     // 面板基准是「以桌宠中心居中」（left:50% + translateX(-50%)），所以位移 = 锚点 - 根节点中心
     let shift = anchor - (r.left + r.width / 2)
-
     // 靠墙时往反方向挪，保证整个面板（含 × ）都在屏幕里
     const left = anchor + shift - w / 2
     if (left < pad) shift += pad - left
     else if (left + w > vw - pad) shift -= left + w - (vw - pad)
     panel.style.setProperty('--dshp-shift', Math.round(shift) + 'px')
     // 纵向兜底：桌宠被拖到屏幕顶端时，面板别伸到屏幕外面去
-    const rect = panel.getBoundingClientRect()
-    let dy = 0
-    if (rect.top < pad) dy = pad - rect.top
-    else if (rect.bottom > window.innerHeight - pad) dy = (window.innerHeight - pad) - rect.bottom
-    panel.style.setProperty('--dshp-shift-y', Math.round(dy) + 'px')
-  }
-
-  function wirePanelDragging() {
-    try {
-      makeDraggable(ui.menu.el, ui.menu.el.querySelector('.dshp-tabs'), 'menu')
-      makeDraggable(ui.hud.el, ui.hud.el.querySelector('.dshp-hud-head'), 'hud')
-      makeDraggable(ui.composer.el, ui.composer.el.querySelector('.dshp-close'), 'composer')
-    } catch (err) {}
+    const top = panel.getBoundingClientRect().top
+    panel.style.setProperty('--dshp-shift-y', top < pad ? Math.round(pad - top) + 'px' : '0px')
   }
 
   function clampPanels() {
@@ -2393,7 +2274,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     bubbleEl.append(head, body, foot)
 
     const dock = $('div', 'dshp-dock')
-    const talkBtn = $('button', 'dshp-btn dshp-primary', '💬 聊天')
+    const talkBtn = $('button', 'dshp-btn dshp-primary', '💬 说话')
     const menuBtn = $('button', 'dshp-btn', '⋯')
     const hideBtn = $('button', 'dshp-btn', '–')
     hideBtn.title = '收起（桌面版会缩成贴边小球）'
@@ -2416,7 +2297,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const menu = $('div', 'dshp-panel dshp-menu')
     const tabs = $('div', 'dshp-tabs')
     const panes = $('div')
-    panes.classList.add('dshp-panes')
     menu.append(tabs, panes)
     addCloseButton(menu)
 
@@ -2536,7 +2416,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   // ——————————————————————————————————————————————————————————————
 
   function wireInteractions() {
-    wirePanelDragging()
     const root = ui.root
     let dragging = false
     let dragMoved = false
@@ -3606,10 +3485,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   }
 
   function renderPane(id) {
-    // 主人要求：设置别压在她身上、也别被窗口裁 —— 切到设置页时整个菜单变成居中弹窗
-    try {
-      ui.menu.el.classList.toggle('dshp-modal', id === 'setting')
-    } catch (err) {}
     const panes = ui.menu.panes
     panes.textContent = ''
     // 顶上永远有一行「她现在是什么状态」，免得一堆按钮里看不出哪个是开着的
@@ -4356,17 +4231,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     hitTest,
     /** 隐藏 / 恢复。壳子（桌面版）收起成小球后，靠它把页面里的状态一起改回来 */
     setHidden,
-    /**
-     * 位置归位：清掉保存的 x/y/贴边，回到默认角落（右下角）。
-     * 为什么需要：桌面壳的窗口尺寸会变（我们把它从 620 加高到 900），
-     * 旧坐标在新窗口里可能落到看不见的地方 —— 启动时归位一次最省心。
-     */
-    resetPosition: () => {
-      for (const k of ['left', 'top', 'right', 'bottom']) ui.root.style[k] = ''
-      saveLayout({ x: null, y: null, edge: null, edgeY: null, corner: null })
-      applyPosition(readLayout())
-      clampPanels()
-    },
     /** 性能档：壳子/设置页用它切「低性能模式」 */
     setLowPower,
     isLowPower: () => PERF.low,
