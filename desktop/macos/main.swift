@@ -196,7 +196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         status.button?.toolTip = "DS 鲸鱼娘桌宠"
         let m = NSMenu()
         m.addItem(withTitle: "重新加载", action: #selector(reload), keyEquivalent: "r")
-        m.addItem(withTitle: "回到右下角", action: #selector(resetPos), keyEquivalent: "")
+        m.addItem(withTitle: "回到右下角（连她的位置一起归位）", action: #selector(resetPetPosition), keyEquivalent: "")
         m.addItem(withTitle: "收起成小球（贴边）", action: #selector(collapseToBall), keyEquivalent: "")
         m.addItem(withTitle: "展开桌宠", action: #selector(expandFromBall), keyEquivalent: "")
         let sizeItem = m.addItem(withTitle: "小球大小", action: nil, keyEquivalent: "")
@@ -388,6 +388,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             }
         }
         startHealthChecks()
+        // 启动后把她的位置归位一次：窗口尺寸变过之后，旧坐标可能落在看不见的地方
+        for delay in [1.5, 4.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.web.evaluateJavaScript("window.DSHPet && DSHPet.resetPosition && DSHPet.resetPosition()",
+                                             completionHandler: nil)
+            }
+        }
         // 启动 5 秒后自己也渲染一张小球图（开发诊断用，主人不用管）
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in self?.saveBallShot("boot") }
         // （自动截图已取消：那是开发期看效果用的，一次全页重绘不便宜，改成菜单里手动点）
@@ -745,6 +752,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         win.orderFrontRegardless()
         log("用户又点了一次图标 → 把桌宠叫到前面")
         return true
+    }
+
+    /// 连页面里的位置一起归位（她自己的坐标存在页面里，光搬窗口不够）
+    @objc func resetPetPosition() {
+        web.evaluateJavaScript("window.DSHPet && DSHPet.resetPosition && DSHPet.resetPosition()",
+                               completionHandler: nil)
+        resetPos()
     }
 
     @objc func resetPos() {

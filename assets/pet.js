@@ -4356,6 +4356,17 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     hitTest,
     /** 隐藏 / 恢复。壳子（桌面版）收起成小球后，靠它把页面里的状态一起改回来 */
     setHidden,
+    /**
+     * 位置归位：清掉保存的 x/y/贴边，回到默认角落（右下角）。
+     * 为什么需要：桌面壳的窗口尺寸会变（我们把它从 620 加高到 900），
+     * 旧坐标在新窗口里可能落到看不见的地方 —— 启动时归位一次最省心。
+     */
+    resetPosition: () => {
+      for (const k of ['left', 'top', 'right', 'bottom']) ui.root.style[k] = ''
+      saveLayout({ x: null, y: null, edge: null, edgeY: null, corner: null })
+      applyPosition(readLayout())
+      clampPanels()
+    },
     /** 性能档：壳子/设置页用它切「低性能模式」 */
     setLowPower,
     isLowPower: () => PERF.low,
