@@ -20,11 +20,14 @@ let WIN_W: CGFloat = 620
 let WIN_H: CGFloat = 560
 let K_X = "pet.win.x", K_Y = "pet.win.y", K_TOP = "pet.win.top"
 
-final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     var win: NSWindow!
     var web: WKWebView!
     var status: NSStatusItem!
     var probe: Timer?
+    var health: Timer?
+    var activity: NSObjectProtocol?
+    var lastHealth = ""
 
     var inside = false          // 鼠标当前是不是压在她（或她的面板）身上
     var downAt = NSPoint.zero   // 按下时的鼠标位置（屏幕坐标）
@@ -36,11 +39,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
 
     func applicationDidFinishLaunching(_ note: Notification) {
         NSApp.setActivationPolicy(.accessory)   // 不占 Dock、不抢焦点
+        // 关键：别让 macOS 把「没人操作的透明窗口」判成 App Nap 而掐掉 requestAnimationFrame。
+        // 被掐的症状极隐蔽：页面不报错、模型数据也加载了，但 rAF 永不触发 →
+        // 前端启动流程停在「等一帧」那一步，于是既画不出她、也连不上事件流。
+        activity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiated, .latencyCritical], reason: "DS 鲸鱼娘桌宠需要持续渲染")
         makeWindow()
         makeWeb()
         makeStatusItem()
         installMonitors()
         restorePosition()
+        win.orderFrontRegardless()
         load()
         probe = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             self?.updateHit()
@@ -68,6 +77,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
 
     func makeWeb() {
         let cfg = WKWebViewConfiguration()
+        // 把页面里的 console / 报错转发到原生日志：壳子里没有开发者工具，
+        // 出问题时只能靠这个看它卡在哪一步。
+        let ucc = WKUserContentController()
+        ucc.add(self, name: "dshpetlog")
+        let hook = """
+        (function(){
+          function send(t, a){
+            try{
+              var s = a.map(function(x){ try{ return typeof x === 'string' ? x : JSON.stringify(x) }catch(e){ return String(x) } }).join(' ');
+              window.webkit.messageHandlers.dshpetlog.postMessage(t + ' ' + s);
+            }catch(e){}
+          }
+          ['log','warn','error'].forEach(function(k){
+            var o = console[k] ? console[k].bind(console) : function(){};
+            console[k] = function(){ send(k, [].slice.call(arguments)); o.apply(null, arguments) };
+          });
+          window.addEventListener('error', function(e){ send('✗ window.onerror', [String(e.message) + ' @ ' + e.filename + ':' + e.lineno]) });
+          window.addEventListener('unhandledrejection', function(e){ send('✗ unhandledrejection', [String(e.reason)]) });
+        })()
+        """
+        ucc.addUserScript(WKUserScript(source: hook, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        cfg.userContentController = ucc
+
         web = WKWebView(frame: win.contentView!.bounds, configuration: cfg)
         web.autoresizingMask = [.width, .height]
         web.navigationDelegate = self
@@ -224,6 +256,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
             [weak self] v, _ in
             self?.log("页面加载完成 → \(v as? String ?? "?")")
         }
+        startHealthChecks()
+    }
+
+    /// 页面里的 console / 报错转发过来的入口
+    func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "dshpetlog" { log(String(describing: message.body)) }
+    }
+
+    /// 每 6 秒问一次页面「你到哪一步了」：模型有没有加载出来、事件流连上没有。
+    /// 桌宠是透明的，出问题时「看不见」和「没启动」长得一样，只能靠这个区分。
+    func startHealthChecks() {
+        health?.invalidate()
+        health = Timer.scheduledTimer(withTimeInterval: 6, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            let js = """
+            (function(){try{
+              var s = (window.DSHPet && window.DSHPet.state) || null;
+              var out = {
+                pet: !!window.DSHPet,
+                model: !!(s && s.modelSize && s.modelSize.w),
+                size: s && s.modelSize ? Math.round(s.modelSize.w)+'x'+Math.round(s.modelSize.h) : null,
+                expr: s && s.expressions ? s.expressions.length : null,
+                mood: s ? (s.mood || s.baseMood || null) : null,
+                agent: s && s.agent ? s.agent.status : null,
+                clients: window.__dshpetClients || null,
+                webgl: (function(){ try{ var c=document.createElement('canvas'); return !!(c.getContext('webgl')||c.getContext('experimental-webgl')) }catch(e){ return false } })(),
+                raf: (function(){
+                  if (window.__rafMs === undefined) { try{ requestAnimationFrame(function(){ window.__rafMs = 1 }) }catch(e){} return 'armed' }
+                  return window.__rafMs
+                })(),
+                err: window.__DSHPetError ? String(window.__DSHPetError).slice(0,160) : null,
+                boot: window.__dshpetBootDone === true
+              };
+              return JSON.stringify(out);
+            }catch(e){ return 'probe error: ' + e.message }})()
+            """
+            self.web.evaluateJavaScript(js) { v, _ in
+                // 只在状态变化时记录，免得日志文件一直长
+                let line = v as? String ?? "?"
+                if line != self.lastHealth {
+                    self.lastHealth = line
+                    self.log("健康检查 \(line)")
+                }
+            }
+        }
+        RunLoop.current.add(health!, forMode: .common)
     }
 
     func webView(_ w: WKWebView, didFailProvisionalNavigation nav: WKNavigation!, withError e: Error) {
