@@ -4075,6 +4075,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     clearProps,
     playMotion,
     hitTest,
+    /** 隐藏 / 恢复。壳子（桌面版）收起成小球后，靠它把页面里的状态一起改回来 */
+    setHidden,
     rebuildMask: () => {
       mask.dirty = true
     },

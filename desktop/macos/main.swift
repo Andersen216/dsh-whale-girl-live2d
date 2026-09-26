@@ -28,6 +28,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     var health: Timer?
     var activity: NSObjectProtocol?
     var lastHealth = ""
+    // 收起态：贴边悬浮小球
+    var ball: NSWindow?
+    var ballWeb: WKWebView?
+    var ballDown = NSPoint.zero
+    var ballAt = NSPoint.zero
+    var ballMoved: CGFloat = 0
+    var hiddenWatch: Timer?
 
     var inside = false          // 鼠标当前是不是压在她（或她的面板）身上
     var downAt = NSPoint.zero   // 按下时的鼠标位置（屏幕坐标）
@@ -47,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         makeWindow()
         makeWeb()
         makeStatusItem()
+        makeBall()
         installMonitors()
         restorePosition()
         win.orderFrontRegardless()
@@ -55,6 +63,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             self?.updateHit()
         }
         RunLoop.current.add(probe!, forMode: .common)
+        // 页面里点「隐藏」→ 自动换成悬浮小球；这是她和壳子的约定
+        hiddenWatch = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            self?.checkHidden()
+        }
+        RunLoop.current.add(hiddenWatch!, forMode: .common)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { false }
@@ -103,12 +116,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         web = WKWebView(frame: win.contentView!.bounds, configuration: cfg)
         web.autoresizingMask = [.width, .height]
         web.navigationDelegate = self
-        // 透明背景：WKWebView 的 drawsBackground 是私有键，先确认存在再设，避免崩
-        if WKWebView.instancesRespond(to: NSSelectorFromString("setDrawsBackground:")) {
+        // 透明背景：三管齐下（WKWebView 的 drawsBackground 是私有键，先确认存在再设，避免崩）
+        // 关掉 WKWebView 自己的白底。
+        // 坑：老写法查的是 setDrawsBackground:，但那是私有属性 —— 运行时真名是
+        // _setDrawsBackground:（KVC 会找到它），查 setDrawsBackground: 只会得到 false，
+        // 于是一直以为「不支持」而跳过，白底就这么留了一路。
+        if WKWebView.instancesRespond(to: NSSelectorFromString("_setDrawsBackground:")) {
             web.setValue(false, forKey: "drawsBackground")
+            log("透明自检：已调用 _setDrawsBackground: 关掉 WebView 白底")
+        } else {
+            log("透明自检：这台系统没有 _setDrawsBackground:，改用 underPageBackgroundColor")
+        }
+        if WKWebView.instancesRespond(to: NSSelectorFromString("_setDrawsTransparentBackground:")) {
+            web.setValue(true, forKey: "drawsTransparentBackground")
+            log("透明自检：已调用 _setDrawsTransparentBackground:")
         }
         if #available(macOS 12.0, *) { web.underPageBackgroundColor = .clear }
+        // 图层底色也清掉：窗口是透明的，但 NSView 图层默认可能带底色（「大白框」的头号嫌疑）
+        web.wantsLayer = true
+        web.layer?.backgroundColor = NSColor.clear.cgColor
+        win.contentView?.wantsLayer = true
+        win.contentView?.layer?.backgroundColor = NSColor.clear.cgColor
         win.contentView!.addSubview(web)
+        clearBackdrops(web)          // WKWebView 内部的滚动视图默认是白底，必须拆掉
+        dumpBackgroundMethods()
+        log("透明自检：underPageBackgroundColor = \(web.underPageBackgroundColor)")
+        // 3 秒后量一次真实像素：窗口角落应该是全透明（alpha=0）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.probeWindowAlpha() }
     }
 
     func makeStatusItem() {
@@ -118,6 +152,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let m = NSMenu()
         m.addItem(withTitle: "重新加载", action: #selector(reload), keyEquivalent: "r")
         m.addItem(withTitle: "回到右下角", action: #selector(resetPos), keyEquivalent: "")
+        m.addItem(withTitle: "收起成小球（贴边）", action: #selector(collapseToBall), keyEquivalent: "")
+        m.addItem(withTitle: "展开桌宠", action: #selector(expandFromBall), keyEquivalent: "")
         let top = m.addItem(withTitle: "总在最前", action: #selector(toggleTop), keyEquivalent: "")
         top.state = (UserDefaults.standard.object(forKey: K_TOP) as? Bool ?? true) ? .on : .off
         m.addItem(.separator())
@@ -133,7 +169,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func installMonitors() {
         NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) {
-            [weak self] e in self?.handle(e) ?? e
+            [weak self] e in
+            guard let self else { return e }
+            if let w = e.window, w === self.ball { return self.ballHandle(e) }
+            return self.handle(e)
         }
     }
 
@@ -190,8 +229,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
       if(window.DSHPet && DSHPet.hitTest && DSHPet.hitTest(x,y)) return true;
       var el=document.elementFromPoint(x,y);
       if(!el || el===document.body || el===document.documentElement) return false;
-      if(!el.closest) return false;
-      return !!el.closest('.dshp-panel,.dshp-menu,.dshp-hud,.dshp-bubble,.dshp-composer,.dshp-dock,.dshp-chip,.dshp-btn,.dshp-tabs');
+      if(el.tagName==='CANVAS') return false;
+      // 她自己的 DOM：凡是能被 elementFromPoint 返回的元素都是可交互的
+      //（透明容器一律 pointer-events:none，压根不会被返回）。
+      // 之前写死类名白名单，漏了恢复用的把手 .dshp-tab —— 结果一收起就再也点不回来。
+      return !!el.closest('.dshp-root, .dshp-tab, [class*="dshp-"]');
     }catch(e){return false}})()
     """
 
@@ -256,6 +298,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             [weak self] v, _ in
             self?.log("页面加载完成 → \(v as? String ?? "?")")
         }
+        clearBackdrops(web)
+        // 启动时一定先把她展开：上次退出时如果是「隐藏」状态，页面会带着 hidden 类回来，
+        // 壳子会立刻收成小球 —— 主人会以为「人没了」。先把状态清掉，要收再自己收。
+        web.evaluateJavaScript("window.DSHPet && DSHPet.setHidden && DSHPet.setHidden(false)",
+                               completionHandler: nil)
         startHealthChecks()
     }
 
@@ -287,6 +334,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                   return window.__rafMs
                 })(),
                 err: window.__DSHPetError ? String(window.__DSHPetError).slice(0,160) : null,
+                bg: getComputedStyle(document.body).backgroundColor + ' / ' + getComputedStyle(document.documentElement).backgroundColor,
+                hidden: document.body.classList.contains('dshp-pet-hidden'),
+                panels: (function(){
+                  var out=[];
+                  try{
+                    document.querySelectorAll('[class*="dshp-"]').forEach(function(n){
+                      var r=n.getBoundingClientRect(), c=getComputedStyle(n).backgroundColor;
+                      if(r.width>150 && r.height>100 && c && c!=='rgba(0, 0, 0, 0)')
+                        out.push(String(n.className).split(' ')[0]+':'+Math.round(r.width)+'x'+Math.round(r.height)+':'+c);
+                    });
+                  }catch(e){}
+                  return out.slice(0,5);
+                })(),
                 boot: window.__dshpetBootDone === true
               };
               return JSON.stringify(out);
@@ -324,6 +384,91 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             return
         }
         decisionHandler(.allow)
+    }
+
+    /// 把视图树里所有「白色底」拆掉。
+    /// 为什么需要：WKWebView 内部包着 NSScrollView，它的 drawsBackground 默认是 true（白），
+    /// 而旧的 setDrawsBackground 私有键在新系统上已经没了 —— 这就是「大白框」的来源。
+    /// 用运行时反射列出 WKWebView 上跟「背景 / 不透明」有关的私有方法名。
+    /// 为什么要这么土：setDrawsBackground 这个老私有键在新系统上已经不存在了，
+    /// 得知道现在到底叫什么才能把白底关掉。
+    func dumpBackgroundMethods() {
+        var count: UInt32 = 0
+        guard let methods = class_copyMethodList(WKWebView.self, &count) else { return }
+        var hits: [String] = []
+        for i in 0..<Int(count) {
+            let name = NSStringFromSelector(method_getName(methods[i]))
+            let low = name.lowercased()
+            if low.contains("background") || low.contains("opaque") || low.contains("draws") {
+                hits.append(name)
+            }
+        }
+        free(methods)
+        // 同时看看父类 NSView 那边有没有相关可用的
+        log("WKWebView 背景相关方法: " + (hits.isEmpty ? "（一个都没有）" : hits.joined(separator: ", ")))
+    }
+
+    @discardableResult
+    func clearBackdrops(_ v: NSView) -> Int {
+        var n = 0
+        v.wantsLayer = true
+        v.layer?.backgroundColor = NSColor.clear.cgColor
+        if let sv = v as? NSScrollView {
+            sv.drawsBackground = false
+            sv.backgroundColor = .clear
+            n += 1
+        }
+        for sub in v.subviews { n += clearBackdrops(sub) }
+        return n
+    }
+
+    /// 把窗口内容渲染到位图里，量几个角落的像素 alpha：
+    /// 全透明 = 修复成功；白色不透明 = 还有底没拆掉。
+    func probeWindowAlpha() {
+        let n = clearBackdrops(web)
+        log("透明量测：又拆了一遍白底，本次找到 NSScrollView \(n) 个")
+
+        func px(_ rep: NSBitmapImageRep?, _ label: String) {
+            guard let rep else { log("\(label)：拿不到位图"); return }
+            var out: [String] = []
+            for (x, y) in [(3, 3), (Int(win.frame.width) - 4, 3), (3, Int(win.frame.height) - 4)] {
+                if x < rep.pixelsWide, y < rep.pixelsHigh, let c = rep.colorAt(x: x, y: y) {
+                    out.append(String(format: "(%d,%d)=r%.2f g%.2f b%.2f a%.2f",
+                                      x, y, c.redComponent, c.greenComponent, c.blueComponent, c.alphaComponent))
+                }
+            }
+            log("\(label)：\(out.joined(separator: "  "))")
+        }
+
+        // ① 对照实验：先把她自己的所有面板/气泡/工具栏藏掉，快照一次。
+        //    如果这时角落还是白的，白底就与她无关，是 WebView 自己的。
+        web.evaluateJavaScript("""
+        (function(){var s=document.createElement('style');s.id='dshpet-probe-hide';
+          s.textContent='[class*="dshp-"]{display:none!important}';document.head.appendChild(s);return 1})()
+        """) { [weak self] _, _ in
+            guard let self else { return }
+            self.web.takeSnapshot(with: WKSnapshotConfiguration()) { img, _ in
+                let rep = img.flatMap { $0.tiffRepresentation }.flatMap { NSBitmapImageRep(data: $0) }
+                px(rep, "藏起她全部 UI 后的角落")
+                self.web.evaluateJavaScript("var e=document.getElementById('dshpet-probe-hide'); e&&e.remove()",
+                                            completionHandler: nil)
+            }
+        }
+
+        // ② 网页内容自己的快照：它透明就说明白底来自 WebView 而不是页面
+        web.takeSnapshot(with: WKSnapshotConfiguration()) { [weak self] img, err in
+            guard let self else { return }
+            let rep = img.flatMap { $0.tiffRepresentation }.flatMap { NSBitmapImageRep(data: $0) }
+            px(rep, "网页快照角落" + (err == nil ? "" : "（err=\(err!.localizedDescription)）"))
+        }
+
+        // ② 窗口在屏幕上的真实样子（没有屏幕录制权限时拿不到，拿不到就说明权限不够）
+        if let cg = CGWindowListCreateImage(.null, .optionIncludingWindow,
+                                            CGWindowID(win.windowNumber), [.boundsIgnoreFraming]) {
+            px(NSBitmapImageRep(cgImage: cg), "屏幕上的窗口角落")
+        } else {
+            log("屏幕上的窗口位图拿不到（缺「屏幕录制」权限，属正常，用网页快照判断）")
+        }
     }
 
     /// 日志同时进 stderr 和 ~/.dsh/whalegirlpet.log，出问题时能直接看

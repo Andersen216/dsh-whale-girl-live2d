@@ -30,7 +30,7 @@ echo "② 编译（swiftc，只有系统框架）"
 swiftc -O -swift-version 5 \
   -target "$(uname -m)-apple-macos13.0" \
   -framework Cocoa -framework WebKit \
-  -o "$APP/Contents/MacOS/$BIN" "$SRC"
+  -o "$APP/Contents/MacOS/$BIN" "$SRC" "$ROOT/desktop/macos/ball.swift"
 
 echo "③ 图标（用插件里那张模型图标，没有就跳过）"
 ICON="$ROOT/assets/model/icon.png"
