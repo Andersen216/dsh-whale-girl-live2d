@@ -20,7 +20,16 @@ dsh plugin --profile web add github:Andersen216/dsh-whale-girl-live2d
 **② 下载客户端**
 
 到 [Releases](https://github.com/Andersen216/dsh-whale-girl-live2d/releases) 下
-`DS 鲸鱼娘桌宠 Setup *.exe`，双击安装（可以选安装目录、会建桌面快捷方式）。
+**`DS-WhaleGirl-Pet-Windows.zip`**（约 108 MB）：
+
+- **解压到任意目录**（比如 `D:\DS-WhaleGirl-Pet`）
+- **双击里面的 `DS 鲸鱼娘桌宠.exe`** —— 免安装
+- 想常驻就右键那个 exe →「发送到」→「桌面快捷方式」；再右键快捷方式 →「固定到开始屏幕」
+
+> 目前的包是**作者在自己的 Mac 上交叉编译**的（用 `--win zip` 绕开 NSIS，因为 Mac 上没有 Windows 打包器）。
+> 正式的 NSIS 安装包（`DS-WhaleGirl-Pet-Windows-Setup.exe`）等
+> [`.github/workflows/build-windows.yml`](../../.github/workflows/build-windows.yml)
+> 在 GitHub 的 Windows 机器上跑起来后会自动产出并挂到 Release。
 
 **③ 重启 DSH，然后双击桌面上的她**
 

@@ -318,7 +318,9 @@ function createBall() {
     skipTaskbar: true,
     show: false,
     alwaysOnTop: true,
-    webPreferences: { contextIsolation: true },
+    // ⚠️ 小球也必须挂 preload：它是靠 window.dshpetBridge 把点击/拖动报回来的，
+    // 不挂就等于「小球点不动、拖不了」（写完先自查发现的）
+    webPreferences: { contextIsolation: true, preload: path.join(__dirname, 'preload.js') },
   })
   ballWin.setAlwaysOnTop(true, 'screen-saver')
   ballWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(ballHTML()))
