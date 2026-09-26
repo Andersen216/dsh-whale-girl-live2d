@@ -44,7 +44,7 @@ sleep "$WAIT"
   fi
 
   cd /Users/andersen || exit 1
-  nohup /usr/local/bin/dsh web --profile web --port 3080 >> "$LOG" 2>&1 &
+  nohup /usr/local/bin/dsh web --port 3080 >> "$LOG" 2>&1 &
   NEW_PID=$!
   echo "新进程 PID: $NEW_PID"
 
@@ -66,7 +66,7 @@ sleep "$WAIT"
     echo "第一次没起来，重试一次"
     sleep 3
     lsof -nP -iTCP:3080 -sTCP:LISTEN -t 2>/dev/null | xargs -r kill -9 2>/dev/null
-    nohup /usr/local/bin/dsh web --profile web --port 3080 >> "$LOG" 2>&1 &
+    nohup /usr/local/bin/dsh web --port 3080 >> "$LOG" 2>&1 &
     NEW_PID=$!
     for i in $(seq 1 40); do
       sleep 1
@@ -89,5 +89,13 @@ sleep "$WAIT"
     echo "whale-widget: $whale （404 = 那个插件仍是停用状态，符合预期）"
     echo "结论: $([ "$pet" = "401" ] && echo '重启成功，桌宠与钱包接口都挂上了' || echo '⚠️ 自检没过，请看 /tmp/dsh-restart.log')"
   } > "$RESULT"
+
+  # 桌面桌宠：重启完顺便拉起来（先杀掉旧的，避免两个实例）
+  PET_APP="$ROOT/dist/desktop/DS 鲸鱼娘桌宠.app"
+  if [ -d "$PET_APP" ]; then
+    pkill -f WhaleGirlPet 2>/dev/null || true
+    sleep 0.5
+    open "$PET_APP" && echo "已拉起桌面桌宠：$PET_APP"
+  fi
   echo "--- 结果已写入 $RESULT ---"
 } >> "$LOG" 2>&1
