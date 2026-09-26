@@ -8,58 +8,72 @@
 // 鼠标悬停微微放大，拖动跟手，松手**动画滑向最近的那一侧**（不是瞬移，也不是随便挑一边）。
 import Cocoa
 
-/// 小球本体：圆形玻璃 + 图标 + 悬停放大
+/// 小球本体：**纯手绘**的圆球（深色玻璃观感）+ 白图标 + 悬停放大。
+///
+/// 为什么不用 NSVisualEffectView：
+/// 主人报「贴右边时上面多一条杠、显示不全」。查出来是玻璃材质（blendingMode = .behindWindow
+/// 采样桌面）在圆角遮罩下会露出一条矩形边缘，而离屏渲染又抓不到它，很难控。
+/// 现在改成自己画：圆 + 顶部柔光 + 描边 + 阴影，几何 100% 可控，任何桌面背景下都稳定。
 final class BallView: NSView {
-    let effect = NSVisualEffectView()
-    let icon = NSImageView()
-    private var tracking: NSTrackingArea?
-    private var sheen: CAGradientLayer?
+    var icon: NSImage?
     private(set) var diameter: CGFloat = 36
-    let pad: CGFloat = 16          // 给阴影和悬停放大留的余量
+    /// 给阴影和悬停放大留的余量（窗口比圆大一圈；这圈是透明的，不显示东西）
+    let pad: CGFloat = 14
+    private var hover = false
+    private var tracking: NSTrackingArea?
 
     init(diameter: CGFloat, icon: NSImage?) {
         self.diameter = diameter
+        self.icon = icon
         super.init(frame: NSRect(x: 0, y: 0, width: diameter + pad * 2, height: diameter + pad * 2))
         wantsLayer = true
-
-        effect.material = .hudWindow
-        effect.blendingMode = .behindWindow     // 关键：透出桌面真实内容，才有玻璃感
-        effect.state = .active
-        // 强制深色玻璃：浅色材质在白桌面上 + 白图标 = 完全看不见（主人报的问题）
-        effect.appearance = NSAppearance(named: .darkAqua)
-        effect.wantsLayer = true
-        effect.layer?.cornerRadius = diameter / 2
-        effect.layer?.masksToBounds = true
-        effect.layer?.borderWidth = 1.5
-        effect.layer?.borderColor = NSColor(white: 1, alpha: 0.55).cgColor   // 亮边：深底上也勾得出来
-        addSubview(effect)
-
-        // 深色压底：就算玻璃材质被系统调亮，这一层也保证「白底上是个黑球」
-        let tint = NSView()
-        tint.wantsLayer = true
-        tint.layer?.backgroundColor = NSColor(white: 0.04, alpha: 0.5).cgColor
-        tint.frame = effect.bounds
-        tint.autoresizingMask = [.width, .height]
-        effect.addSubview(tint)
-
-        // 液态玻璃的高光：上半部分一道柔光
-        let sheen = CAGradientLayer()
-        sheen.colors = [NSColor(white: 1, alpha: 0.22).cgColor, NSColor(white: 1, alpha: 0).cgColor]
-        sheen.startPoint = CGPoint(x: 0.5, y: 1)
-        sheen.endPoint = CGPoint(x: 0.5, y: 0.35)
-        sheen.frame = effect.bounds
-        effect.layer?.addSublayer(sheen)
-        self.sheen = sheen
-
-        self.icon.image = icon
-        self.icon.imageScaling = .scaleProportionallyUpOrDown
-        self.icon.contentTintColor = .white
-        effect.addSubview(self.icon)
-
-        layoutBall(scale: 1)
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    /// 圆在当前视图里的矩形（悬停时放大 10%）
+    func circleRect() -> NSRect {
+        let d = diameter * (hover ? 1.1 : 1)
+        let c = NSPoint(x: bounds.midX, y: bounds.midY)
+        return NSRect(x: c.x - d / 2, y: c.y - d / 2, width: d, height: d)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let rect = circleRect()
+        let d = rect.width
+
+        // ① 柔和的落影（自己做，比窗口阴影更听话，也不会被窗口边缘切）
+        NSGraphicsContext.saveGraphicsState()
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor(white: 0, alpha: 0.38)
+        shadow.shadowBlurRadius = d * 0.24
+        shadow.shadowOffset = NSSize(width: 0, height: -d * 0.07)
+        shadow.set()
+        NSColor(white: 0.10, alpha: 0.94).setFill()
+        NSBezierPath(ovalIn: rect).fill()
+        NSGraphicsContext.restoreGraphicsState()
+
+        // ② 顶部柔光：液态玻璃那种「上亮下暗」的感觉
+        NSGraphicsContext.saveGraphicsState()
+        NSBezierPath(ovalIn: rect.insetBy(dx: 1, dy: 1)).addClip()
+        let top = NSRect(x: rect.minX, y: rect.midY, width: rect.width, height: rect.height / 2)
+        NSGradient(colors: [NSColor(white: 1, alpha: 0.26), NSColor(white: 1, alpha: 0.0)])?
+            .draw(in: top, angle: -90)
+        NSGraphicsContext.restoreGraphicsState()
+
+        // ③ 描边：让它在深色桌面上也立得起来
+        NSColor(white: 1, alpha: hover ? 0.55 : 0.34).setStroke()
+        let border = NSBezierPath(ovalIn: rect.insetBy(dx: 0.75, dy: 0.75))
+        border.lineWidth = 1.5
+        border.stroke()
+
+        // ④ 图标（白色，画的时候按当前填充色走的是模板图）
+        if let img = icon {
+            let s = d * 0.58
+            img.draw(in: NSRect(x: rect.midX - s / 2, y: rect.midY - s / 2, width: s, height: s),
+                     from: .zero, operation: .sourceOver, fraction: 1)
+        }
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -70,40 +84,13 @@ final class BallView: NSView {
         tracking = t
     }
 
-    override func mouseEntered(with event: NSEvent) { animate(scale: 1.12) }
-    override func mouseExited(with event: NSEvent) { animate(scale: 1) }
+    override func mouseEntered(with event: NSEvent) { setHover(true) }
+    override func mouseExited(with event: NSEvent) { setHover(false) }
 
-    /// 用 animator() 调它 → 悬停放大是动画，不是跳变
-    @objc func layoutBall(scale: CGFloat) {
-        let d = diameter * scale
-        let c = NSPoint(x: bounds.midX, y: bounds.midY)
-        effect.frame = NSRect(x: c.x - d / 2, y: c.y - d / 2, width: d, height: d)
-        effect.layer?.cornerRadius = d / 2
-        let s = d * 0.58
-        icon.frame = NSRect(x: (d - s) / 2, y: (d - s) / 2, width: s, height: s)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        sheen?.frame = NSRect(x: 0, y: 0, width: d, height: d)
-        CATransaction.commit()
-    }
-
-    /// 悬停放大。
-    /// 踩过的坑：之前写成 `self.animator().layoutBall(scale:)` —— 动画代理处理不了
-    /// 自定义方法签名，鼠标一碰到小球就 **段错误崩溃**（崩溃报告里就是这一帧）。
-    /// 现在只对标准属性（NSView.frame）做动画，圆角直接设值。
-    private func animate(scale: CGFloat) {
-        let d = diameter * scale
-        let c = NSPoint(x: bounds.midX, y: bounds.midY)
-        let eFrame = NSRect(x: c.x - d / 2, y: c.y - d / 2, width: d, height: d)
-        let s = d * 0.52
-        let iFrame = NSRect(x: (d - s) / 2, y: (d - s) / 2, width: s, height: s)
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.14
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            self.effect.animator().frame = eFrame
-            self.icon.animator().frame = iFrame
-        }
-        effect.layer?.cornerRadius = d / 2
+    private func setHover(_ on: Bool) {
+        guard hover != on else { return }
+        hover = on
+        needsDisplay = true
     }
 }
 
@@ -117,20 +104,35 @@ extension AppDelegate {
 
     func makeBall() {
         let d = ballDiameter()
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: d + 32, height: d + 32),
+        let pad: CGFloat = 14
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: d + pad * 2, height: d + pad * 2),
                          styleMask: [.borderless], backing: .buffered, defer: false)
         w.isOpaque = false
         w.backgroundColor = .clear
-        w.hasShadow = true                    // 窗口阴影跟着圆形 alpha 走，正好是球的光晕
-        w.level = .statusBar          // 抬到普通窗口之上，免得被别的 App 盖住「看不见了」
+        w.hasShadow = false               // 阴影由 BallView 自己画（更可控、不会被窗口边缘切）
+        w.level = .statusBar
         w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         w.isReleasedWhenClosed = false
 
-        let view = BallView(diameter: d, icon: ballIconImage())
+        let view = BallView(diameter: d, icon: whiteIcon(ballIconImage()))
         w.contentView = view
         ball = w
         ballView = view
-        log("悬浮小球已就绪（原生玻璃球 " + String(Int(d)) + "px）")
+        log("悬浮小球已就绪（手绘圆球 " + String(Int(d)) + "px，窗口 " + String(Int(d + pad * 2)) + "px）")
+    }
+
+    /// 把图标染成纯白（手绘时模板图不会自动上色，得自己来）
+    func whiteIcon(_ img: NSImage?) -> NSImage? {
+        guard let img else { return nil }
+        let size = img.size.width > 0 ? img.size : NSSize(width: 64, height: 64)
+        let out = NSImage(size: size)
+        out.lockFocus()
+        let r = NSRect(origin: .zero, size: size)
+        img.draw(in: r, from: .zero, operation: .sourceOver, fraction: 1)
+        NSColor.white.setFill()
+        r.fill(using: .sourceAtop)
+        out.unlockFocus()
+        return out
     }
 
     /// DSH 官方图标（读安装目录里的 favicon.svg；读不到退回模型自带图标，再不行用系统符号）
@@ -174,8 +176,11 @@ extension AppDelegate {
             ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let dLeft = abs(win.frame.midX - vf.minX)
         let dRight = abs(vf.maxX - win.frame.midX)
-        let x = (dLeft <= dRight) ? vf.minX + 4 : vf.maxX - b.frame.width - 4
-        let y = min(max(win.frame.midY - b.frame.height / 2, vf.minY + 4), vf.maxY - b.frame.height - 4)
+        let pad = ballView?.pad ?? 14
+        let d = ballDiameter()
+        let visibleD = d * 1.1 + 2
+        let x = ((dLeft <= dRight) ? vf.minX + 3 : vf.maxX - visibleD - 3) - pad
+        let y = min(max(win.frame.midY - b.frame.height / 2, vf.minY + 3 - pad), vf.maxY - visibleD - 3 - pad)
         b.setFrameOrigin(NSPoint(x: x, y: y))
         b.alphaValue = 1
         b.orderFrontRegardless()
@@ -184,6 +189,10 @@ extension AppDelegate {
         UserDefaults.standard.set(Double(y), forKey: "ball.y")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.endAwake() }
         log("已收起成小球 → 贴" + (dLeft <= dRight ? "左" : "右") + "边 (\(Int(x)),\(Int(y))) 可见=\(b.isVisible)")
+        // 几何自检：小球窗口 vs 屏幕可见范围（判断是不是被屏幕/程序坞切掉了）
+        log("小球几何：窗口 x\(Int(b.frame.minX))–\(Int(b.frame.maxX)) y\(Int(b.frame.minY))–\(Int(b.frame.maxY))"
+            + " | 屏幕可见 x\(Int(vf.minX))–\(Int(vf.maxX)) y\(Int(vf.minY))–\(Int(vf.maxY))")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.saveBallShot("dock") }
     }
 
     @objc func expandFromBall() {
@@ -197,15 +206,41 @@ extension AppDelegate {
         log("已展开桌宠")
     }
 
+
+    /// 把小球渲染成图片存下来（开发诊断用）。
+    /// 小球是原生视图、透明窗口又没法用系统截图，所以只能自己渲染一份来看 ——
+    /// 主人报的「贴右边时上面多一条杠、显示不全」就是靠它定位的。
+    func saveBallShot(_ tag: String) {
+        guard let v = ballView else { return }
+        let scale: CGFloat = 2
+        let w = Int(v.bounds.width * scale), h = Int(v.bounds.height * scale)
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h,
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                         isPlanar: false, colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 0, bitsPerPixel: 0) else { return }
+        rep.size = v.bounds.size
+        v.cacheDisplay(in: v.bounds, to: rep)
+        guard let png = rep.representation(using: .png, properties: [:]) else { return }
+        let path = NSHomeDirectory() + "/.dsh/whalegirlpet-ball-\(tag).png"
+        try? png.write(to: URL(fileURLWithPath: path))
+        log("小球自检图已存：\(path)（\(w)×\(h)，窗口 \(Int(v.bounds.width))×\(Int(v.bounds.height))）")
+    }
+
     /// 贴边：吸到**离得最近**的那一侧（比球心到左右边缘的距离），带动画
     func snapBall(animated: Bool) {
         guard let b = ball, b.isVisible else { return }
         let vf = (b.screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let f = b.frame
+        let pad = ballView?.pad ?? 14
+        let d = ballDiameter()
         let dLeft = abs(f.midX - vf.minX)
         let dRight = abs(vf.maxX - f.midX)
-        let x = (dLeft <= dRight) ? vf.minX + 4 : vf.maxX - f.width - 4
-        let y = min(max(f.minY, vf.minY + 4), vf.maxY - f.height - 4)
+        // 关键：按**圆**贴边（窗口比圆大一圈，那一圈是透明的）。
+        // 之前按窗口贴边，圆就被推出屏幕一点 →「显示不全」。
+        let visibleD = d * 1.1 + 2                       // 悬停会放大 10%，留出余量
+        let circleX = (dLeft <= dRight) ? vf.minX + 3 : vf.maxX - visibleD - 3
+        let x = circleX - pad
+        let y = min(max(f.minY, vf.minY + 3 - pad), vf.maxY - visibleD - 3 - pad)
         let target = NSPoint(x: x, y: y)
         if animated {
             NSAnimationContext.runAnimationGroup { ctx in

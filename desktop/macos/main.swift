@@ -382,6 +382,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             }
         }
         startHealthChecks()
+        // 启动 5 秒后自己也渲染一张小球图（开发诊断用，主人不用管）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in self?.saveBallShot("boot") }
         // （自动截图已取消：那是开发期看效果用的，一次全页重绘不便宜，改成菜单里手动点）
     }
 
