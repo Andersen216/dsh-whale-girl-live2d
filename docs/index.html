@@ -99,6 +99,30 @@
     <li><b>打开客户端</b> —— 她就出现了。连不上她会每 5 秒自动重试，不用重启客户端</li>
   </ol>
 
+  <div class="note" style="border-left-color:#ffce6a">
+    <b>先说清楚两件事</b><br>
+    ① <b>这套东西是在 macOS 上开发的</b>，所以 Mac 客户端更成熟：点击穿透、贴边小圆球、低性能模式、菜单栏控制，都在真机上跑过很多轮。
+    Windows 客户端功能做得和 Mac 一致，但<b>作者手上没有 Windows 机器，只在 Mac 上交叉编译过、没法实机验证</b> ——
+    所以<b>特别欢迎 Windows 用户帮忙试一下</b>（能跑就行，跑不动更好），有问题开
+    <a href="https://github.com/Andersen216/dsh-whale-girl-live2d/issues">Issue</a> 或留言，我跟着修。<br>
+    ② 网页版（不装客户端）在 Windows / macOS / Linux 上<b>功能完全一样</b>，只是她待在浏览器标签页里。
+  </div>
+
+  <h2>下载方式（哪条路都行）</h2>
+  <ul class="steps" style="list-style:none;padding-left:0">
+    <li style="padding-left:0"><b>① 就用本页上面那两个大按钮</b> —— 最省事，点一下直接开始下载</li>
+    <li style="padding-left:0"><b>② 去 Releases 页面</b> ——
+      <a href="https://github.com/Andersen216/dsh-whale-girl-live2d/releases/latest">所有附件都在这儿</a>，
+      想找旧版本也在这（文件名：Mac 是 <code>DS-WhaleGirl-Pet-macOS.zip</code>，
+      Windows 是 <code>DS-WhaleGirl-Pet-Windows.zip</code>）</li>
+    <li style="padding-left:0"><b>③ 只想要网页版</b> —— 不用下客户端，一条命令：
+      <code>dsh plugin --profile web add github:Andersen216/dsh-whale-girl-live2d</code></li>
+    <li style="padding-left:0"><b>④ 想自己编译</b> —— 说明分别在
+      <a href="https://github.com/Andersen216/dsh-whale-girl-live2d/blob/main/desktop/README.md">macOS 版</a> 和
+      <a href="https://github.com/Andersen216/dsh-whale-girl-live2d/blob/main/desktop/windows/README.md">Windows 版</a>
+      （macOS 用系统自带 Swift，Windows 用 Electron）</li>
+  </ul>
+
   <div class="note">
     🐋 <b>客户端和网页版是同一套东西的两层</b>：插件只有一个，装一次两边共用。
     客户端只是个 1~3 MB 的小窗口（透明、置顶、点击穿透、能贴边收成小球），
@@ -145,6 +169,12 @@
     <p>文件名 <code>DS-WhaleGirl-Pet-Windows.zip</code>（约 108 MB）：<b>解压到任意目录，双击里面的
     <code>DS 鲸鱼娘桌宠.exe</code> 就能用，不需要安装</b>。想放到开始菜单就右键那个 exe「发送到 → 桌面快捷方式」。</p>
     <p>（它由作者的 Mac 交叉编译而来；正式的 NSIS 安装包等 GitHub Actions 的流水线跑起来后补上。）</p></details>
+  <details><summary>Windows 客户端打不开 / 没反应</summary>
+    <p>先说声抱歉，Windows 版是作者在 Mac 上交叉编译的、没在真机上验证过。常见两种情况：
+    ① 解压后在文件夹里双击 <code>DS 鲸鱼娘桌宠.exe</code>，如果被系统拦（SmartScreen），点「更多信息 → 仍要运行」；
+    ② 打开后一片空白或显示提示卡，说明插件没装好或 DSH 没启动 —— 客户端里点「一键安装插件」再重启 DSH。
+    还是不行就开个 <a href="https://github.com/Andersen216/dsh-whale-girl-live2d/issues">Issue</a>，
+    把现象和截图发我，我这边跟着改。</p></details>
   <details><summary>她觉得卡 / 笔记本发烫</summary>
     <p>切到「低性能模式」（托盘 / 菜单栏图标里）：不自己找戏、不自言自语，只眨眼和轻微摆动，点了她才动。省电明显。</p></details>
 
