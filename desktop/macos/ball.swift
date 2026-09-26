@@ -1,135 +1,217 @@
-// 鲸鱼娘桌宠 · 收起态的「贴边悬浮小球」
+// 鲸鱼娘桌宠 · 收起态的贴边悬浮球（原生版）
 // ————————————————————————————————————————————————————————————
-// 主人要求：点「隐藏」不要只是消失不见，要像 360 那种悬浮球 ——
-// 缩成一个小圆球贴在屏幕边上，中间是 DeepSeek 的图标，点一下就把她叫回来。
+// 为什么不用 WebView 画：主人要的是「液态玻璃」那种半透明观感 —— 那必须让系统去采样
+// 桌面背后真正的内容（NSVisualEffectView + blendingMode = .behindWindow），
+// 网页里的 backdrop-filter 只能模糊网页自己，做不出来。
 //
-// 实现要点：
-//   · 小球是**另一个窗口**（68×68，透明、无边框、置顶），主窗口 orderOut 让位
-//   · 松手自动贴左/右墙（竖直位置随你放），下次打开还在那儿
-//   · 点一下 = 展开；拖动 = 挪位置；右键 = 菜单（展开 / 退出）
-//   · 图标直接读 DSH 安装目录里的官方 favicon.svg，不往仓库里塞别人的品牌素材
+// 观感：直径 36px 的圆形玻璃球（菜单里可调 28 / 36 / 48），中间是 DSH 官方图标（白色），
+// 鼠标悬停微微放大，拖动跟手，松手**动画滑向最近的那一侧**（不是瞬移，也不是随便挑一边）。
 import Cocoa
-import WebKit
+
+/// 小球本体：圆形玻璃 + 图标 + 悬停放大
+final class BallView: NSView {
+    let effect = NSVisualEffectView()
+    let icon = NSImageView()
+    private var tracking: NSTrackingArea?
+    private var sheen: CAGradientLayer?
+    private(set) var diameter: CGFloat = 36
+    let pad: CGFloat = 16          // 给阴影和悬停放大留的余量
+
+    init(diameter: CGFloat, icon: NSImage?) {
+        self.diameter = diameter
+        super.init(frame: NSRect(x: 0, y: 0, width: diameter + pad * 2, height: diameter + pad * 2))
+        wantsLayer = true
+
+        effect.material = .hudWindow
+        effect.blendingMode = .behindWindow     // 关键：透出桌面真实内容，才有玻璃感
+        effect.state = .active
+        // 强制深色玻璃：浅色材质在白桌面上 + 白图标 = 完全看不见（主人报的问题）
+        effect.appearance = NSAppearance(named: .darkAqua)
+        effect.wantsLayer = true
+        effect.layer?.cornerRadius = diameter / 2
+        effect.layer?.masksToBounds = true
+        effect.layer?.borderWidth = 1.5
+        effect.layer?.borderColor = NSColor(white: 1, alpha: 0.55).cgColor   // 亮边：深底上也勾得出来
+        addSubview(effect)
+
+        // 深色压底：就算玻璃材质被系统调亮，这一层也保证「白底上是个黑球」
+        let tint = NSView()
+        tint.wantsLayer = true
+        tint.layer?.backgroundColor = NSColor(white: 0.04, alpha: 0.5).cgColor
+        tint.frame = effect.bounds
+        tint.autoresizingMask = [.width, .height]
+        effect.addSubview(tint)
+
+        // 液态玻璃的高光：上半部分一道柔光
+        let sheen = CAGradientLayer()
+        sheen.colors = [NSColor(white: 1, alpha: 0.22).cgColor, NSColor(white: 1, alpha: 0).cgColor]
+        sheen.startPoint = CGPoint(x: 0.5, y: 1)
+        sheen.endPoint = CGPoint(x: 0.5, y: 0.35)
+        sheen.frame = effect.bounds
+        effect.layer?.addSublayer(sheen)
+        self.sheen = sheen
+
+        self.icon.image = icon
+        self.icon.imageScaling = .scaleProportionallyUpOrDown
+        self.icon.contentTintColor = .white
+        effect.addSubview(self.icon)
+
+        layoutBall(scale: 1)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let t = tracking { removeTrackingArea(t) }
+        let t = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways],
+                               owner: self, userInfo: nil)
+        addTrackingArea(t)
+        tracking = t
+    }
+
+    override func mouseEntered(with event: NSEvent) { animate(scale: 1.12) }
+    override func mouseExited(with event: NSEvent) { animate(scale: 1) }
+
+    /// 用 animator() 调它 → 悬停放大是动画，不是跳变
+    @objc func layoutBall(scale: CGFloat) {
+        let d = diameter * scale
+        let c = NSPoint(x: bounds.midX, y: bounds.midY)
+        effect.frame = NSRect(x: c.x - d / 2, y: c.y - d / 2, width: d, height: d)
+        effect.layer?.cornerRadius = d / 2
+        let s = d * 0.58
+        icon.frame = NSRect(x: (d - s) / 2, y: (d - s) / 2, width: s, height: s)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        sheen?.frame = NSRect(x: 0, y: 0, width: d, height: d)
+        CATransaction.commit()
+    }
+
+    private func animate(scale: CGFloat) {
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.14
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            self.animator().layoutBall(scale: scale)
+        }
+    }
+}
 
 extension AppDelegate {
 
+    /// 小球直径：主人可在菜单里选小 / 中 / 大
+    func ballDiameter() -> CGFloat {
+        let v = UserDefaults.standard.double(forKey: "ball.d")
+        return v > 0 ? CGFloat(v) : 36
+    }
+
     func makeBall() {
-        let size: CGFloat = 68
-        let f = NSRect(x: 0, y: 0, width: size, height: size)
-        let w = NSWindow(contentRect: f, styleMask: [.borderless], backing: .buffered, defer: false)
+        let d = ballDiameter()
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: d + 32, height: d + 32),
+                         styleMask: [.borderless], backing: .buffered, defer: false)
         w.isOpaque = false
         w.backgroundColor = .clear
-        w.hasShadow = false
+        w.hasShadow = true                    // 窗口阴影跟着圆形 alpha 走，正好是球的光晕
         w.level = .floating
         w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         w.isReleasedWhenClosed = false
 
-        let cfg = WKWebViewConfiguration()
-        let web = WKWebView(frame: NSRect(origin: .zero, size: f.size), configuration: cfg)
-        web.autoresizingMask = [.width, .height]
-        if WKWebView.instancesRespond(to: NSSelectorFromString("_setDrawsBackground:")) {
-            web.setValue(false, forKey: "drawsBackground")
-        }
-        if WKWebView.instancesRespond(to: NSSelectorFromString("_setDrawsTransparentBackground:")) {
-            web.setValue(true, forKey: "drawsTransparentBackground")
-        }
-        if #available(macOS 12.0, *) { web.underPageBackgroundColor = .clear }
-        w.contentView!.addSubview(web)
-
-        web.loadHTMLString(ballHTML(), baseURL: nil)
+        let view = BallView(diameter: d, icon: ballIconImage())
+        w.contentView = view
         ball = w
-        ballWeb = web
-        log("悬浮小球已就绪（收起后贴边显示）")
+        ballView = view
+        log("悬浮小球已就绪（原生玻璃球 " + String(Int(d)) + "px）")
     }
 
-    func ballHTML() -> String {
-        """
-        <!doctype html><meta charset="utf-8"><style>
-        html,body{margin:0;height:100%;background:transparent;overflow:hidden;
-          -webkit-user-select:none;user-select:none;-webkit-user-drag:none}
-        .ball{width:100%;height:100%;border-radius:50%;box-sizing:border-box;
-          background:rgba(22,26,38,.9);border:1px solid rgba(255,255,255,.18);
-          box-shadow:0 8px 22px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;
-          transition:transform .12s ease,background .12s ease}
-        .ball:hover{background:rgba(36,42,60,.97);transform:scale(1.07)}
-        .ball svg{width:56%;height:56%}
-        .ball svg path{fill:#fff}
-        </style><body><div class="ball">\(brandSVG())</div></body>
-        """
-    }
-
-    /// DSH 自带的品牌图标（从安装目录读；读不到就退回模型图标，最后兜底一个「DS」字样）
-    func brandSVG() -> String {
-        let candidates = [
-            "/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-web-frontend/dist/favicon.svg",
-            NSHomeDirectory() + "/.dsh/favicon.svg",
-        ]
-        for p in candidates {
-            guard let s = try? String(contentsOfFile: p, encoding: .utf8), s.contains("<svg") else { continue }
-            var out = s
-            // 去掉它自带的 prefers-color-scheme 样式，颜色统一由小球这边控制
-            if let a = out.range(of: "<style>"), let b = out.range(of: "</style>") {
-                out.removeSubrange(a.lowerBound..<b.upperBound)
-            }
-            return out
+    /// DSH 官方图标（读安装目录里的 favicon.svg；读不到退回模型自带图标，再不行用系统符号）
+    func ballIconImage() -> NSImage? {
+        let favicon = "/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-web-frontend/dist/favicon.svg"
+        if let img = NSImage(contentsOfFile: favicon), img.size.width > 0 {
+            img.isTemplate = true             // 当模板 → contentTintColor 能把它染白
+            return img
         }
-        log("没找到 DSH 的 favicon.svg，小球用兜底字样")
-        return #"<span style="color:#fff;font:600 20px -apple-system,sans-serif">DS</span>"#
+        if let img = NSImage(contentsOfFile: assetsPath + "/model/icon.png") { return img }
+        log("小球图标：两个来源都没读到，用系统符号兜底")
+        return NSImage(systemSymbolName: "water.waves", accessibilityDescription: "鲸鱼娘")
     }
 
-    // MARK: - 收起 / 展开
+    @objc func setBallSmall() { setBallDiameter(28) }
+    @objc func setBallMedium() { setBallDiameter(36) }
+    @objc func setBallLarge() { setBallDiameter(48) }
+
+    func setBallDiameter(_ d: CGFloat) {
+        UserDefaults.standard.set(Double(d), forKey: "ball.d")
+        let wasVisible = ball?.isVisible ?? false
+        let at = ball?.frame.origin ?? .zero
+        ball?.orderOut(nil)
+        makeBall()
+        if wasVisible, let b = ball {
+            b.setFrameOrigin(at)
+            b.orderFrontRegardless()
+            snapBall(animated: false)
+        }
+        log("小球直径改为 " + String(Int(d)) + "px")
+    }
+
+    // MARK: - 收起 / 展开（带过渡动画，不再「先卡一下」）
 
     @objc func collapseToBall() {
-        guard let b = ball else { return }
-        if b.isVisible { return }
+        guard let b = ball, !b.isVisible else { return }
         savePosition()
-        // 小球的初始位置：贴着主窗口所在的那一侧，竖直高度取主窗口中心
-        let vf = (win.screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let d = UserDefaults.standard
-        var p: NSPoint
-        if d.object(forKey: "ball.x") != nil {
-            p = NSPoint(x: d.double(forKey: "ball.x"), y: d.double(forKey: "ball.y"))
-        } else {
-            let onLeft = win.frame.midX < vf.midX
-            p = NSPoint(x: onLeft ? vf.minX + 6 : vf.maxX - b.frame.width - 6,
-                        y: min(max(win.frame.midY - b.frame.height / 2, vf.minY + 6), vf.maxY - b.frame.height - 6))
-        }
-        b.setFrameOrigin(p)
+        // 从「她当前所在位置」开始：先原地淡入，再飞向最近的那一边
+        let center = NSPoint(x: win.frame.midX, y: win.frame.midY)
+        b.setFrameOrigin(NSPoint(x: center.x - b.frame.width / 2, y: center.y - b.frame.height / 2))
+        b.alphaValue = 0
         b.orderFrontRegardless()
-        win.orderOut(nil)
-        snapBall()
-        log("已收起成小球（位置 \(Int(b.frame.minX)),\(Int(b.frame.minY))）")
-        // 小球自己也量一次透明：它要是白方块就白做了
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            guard let self, let bw = self.ballWeb else { return }
-            self.clearBackdrops(bw)
-            bw.takeSnapshot(with: WKSnapshotConfiguration()) { img, _ in
-                let rep = img.flatMap { $0.tiffRepresentation }.flatMap { NSBitmapImageRep(data: $0) }
-                if let c = rep?.colorAt(x: 2, y: 2) {
-                    self.log(String(format: "小球角落像素 r%.2f g%.2f b%.2f a%.2f（a=0 表示圆外透明）",
-                                    c.redComponent, c.greenComponent, c.blueComponent, c.alphaComponent))
-                }
-            }
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.18
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            self.win.animator().alphaValue = 0
+            b.animator().alphaValue = 1
+        } completionHandler: { [weak self] in
+            self?.win.orderOut(nil)
+            self?.win.alphaValue = 1
         }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in self?.snapBall(animated: true) }
+        log("已收起成小球")
     }
 
     @objc func expandFromBall() {
-        ball?.orderOut(nil)
+        guard let b = ball, b.isVisible else { return }
+        win.alphaValue = 0
         win.orderFrontRegardless()
-        // 页面里那个「隐藏」状态也要一起改回来，否则她还是不显示
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.18
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            b.animator().alphaValue = 0
+            self.win.animator().alphaValue = 1
+        } completionHandler: { [weak self] in
+            self?.ball?.orderOut(nil)
+            self?.ball?.alphaValue = 1
+        }
         web.evaluateJavaScript("window.DSHPet && DSHPet.setHidden && DSHPet.setHidden(false)",
                                completionHandler: nil)
         log("已展开桌宠")
     }
 
-    /// 贴边：吸附到最近的一侧（只吸左右，竖直位置保持）
-    func snapBall() {
+    /// 贴边：吸到**离得最近**的那一侧（比球心到左右边缘的距离），带动画
+    func snapBall(animated: Bool) {
         guard let b = ball, b.isVisible else { return }
         let vf = (b.screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let f = b.frame
-        let x = (f.midX < vf.midX) ? vf.minX + 6 : vf.maxX - f.width - 6
-        let y = min(max(f.minY, vf.minY + 6), vf.maxY - f.height - 6)
-        b.setFrameOrigin(NSPoint(x: x, y: y))
+        let dLeft = abs(f.midX - vf.minX)
+        let dRight = abs(vf.maxX - f.midX)
+        let x = (dLeft <= dRight) ? vf.minX + 4 : vf.maxX - f.width - 4
+        let y = min(max(f.minY, vf.minY + 4), vf.maxY - f.height - 4)
+        let target = NSPoint(x: x, y: y)
+        if animated {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.26
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                b.animator().setFrameOrigin(target)
+            }
+        } else {
+            b.setFrameOrigin(target)
+        }
         UserDefaults.standard.set(Double(x), forKey: "ball.x")
         UserDefaults.standard.set(Double(y), forKey: "ball.y")
     }
@@ -148,14 +230,11 @@ extension AppDelegate {
             let m = NSEvent.mouseLocation
             let dx = m.x - ballDown.x, dy = m.y - ballDown.y
             ballMoved = max(ballMoved, abs(dx) + abs(dy))
-            if ballMoved > 3 {
-                ball?.setFrameOrigin(NSPoint(x: ballAt.x + dx, y: ballAt.y + dy))
-            }
+            if ballMoved > 3 { ball?.setFrameOrigin(NSPoint(x: ballAt.x + dx, y: ballAt.y + dy)) }
             return nil
 
         case .leftMouseUp:
-            if ballMoved > 3 { snapBall(); log("小球贴边") }
-            else { expandFromBall() }
+            if ballMoved > 3 { snapBall(animated: true) } else { expandFromBall() }
             return nil
 
         default:
@@ -163,19 +242,16 @@ extension AppDelegate {
         }
     }
 
-    // MARK: - 页面里的隐藏状态 → 自动换小球
-
-    /// 主人在页面里点了「隐藏」就把主窗口收起来、换成小球；
-    /// 反过来如果页面里又显示了她（比如从浏览器那边点回来的），小球就收起来。
+    /// 兜底：万一前端那条 postMessage 没送到，1.5 秒轮询一次补上
     func checkHidden() {
         guard let b = ball else { return }
+        // 启动后 8 秒内不自动收球：她可能正带着上次的 hidden 状态启动，别一开机就只剩一个球
+        if Date().timeIntervalSince(launchedAt) < 8 { return }
         web.evaluateJavaScript("!!(document.body && document.body.classList.contains('dshp-pet-hidden'))") {
             [weak self] v, _ in
             guard let self else { return }
             let hidden = (v as? Bool) ?? false
-            if hidden && !b.isVisible && self.win.isVisible {
-                self.collapseToBall()
-            }
+            if hidden && !b.isVisible && self.win.isVisible { self.collapseToBall() }
         }
     }
 }

@@ -3184,11 +3184,32 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    * 后代选择器永远匹配不到。现在改成 body 级类，并且收进这一个函数，
    * 保证「隐藏态」和「把手可见」永远同步。
    */
+  /**
+   * 桌面壳（macOS 原生 App）的桥。
+   * 壳子启动时会在页面里设 window.__DSHPET_SHELL__ = true，并挂一个 dshpetshell 消息通道。
+   * 有它的时候：① 收起/展开走消息，立刻响应，不用等轮询；
+   *             ② 设置页多出「收起成悬浮小球」和「彻底关闭桌宠应用」。
+   */
+  const shell = {
+    on: !!(
+      window.__DSHPET_SHELL__ &&
+      window.webkit &&
+      window.webkit.messageHandlers &&
+      window.webkit.messageHandlers.dshpetshell
+    ),
+    post(msg) {
+      try {
+        window.webkit.messageHandlers.dshpetshell.postMessage(msg)
+      } catch (e) {}
+    },
+  }
+
   function setHidden(hidden) {
     ui.root.classList.toggle('dshp-hidden', !!hidden)
     document.body.classList.toggle('dshp-pet-hidden', !!hidden)
     if (hidden) ui.bubble.hide()
     saveLayout({ hidden: !!hidden })
+    if (shell.on) shell.post(hidden ? 'hidden' : 'shown')
   }
 
   /**
@@ -3588,12 +3609,27 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       saveLayout({ x: null, y: null })
       applyPosition(readLayout())
     })
-    const hide = $('button', 'dshp-btn', '隐藏桌宠（右下角把手叫回来）')
+    const hide = $('button', 'dshp-btn', shell.on ? '隐藏桌宠（缩成贴边小球）' : '隐藏桌宠（右下角把手叫回来）')
     hide.addEventListener('click', () => {
       closePanels()
       setHidden(true)
     })
     row2.append(reset, hide)
+    if (shell.on) {
+      const row3 = $('div', 'dshp-row')
+      const toBall = $('button', 'dshp-btn', '收起成悬浮小球')
+      toBall.addEventListener('click', () => {
+        closePanels()
+        setHidden(true)
+      })
+      const quitApp = $('button', 'dshp-btn', '彻底关闭桌宠应用')
+      quitApp.addEventListener('click', () => {
+        ui.bubble.show('人家先退下了，想叫我就去「应用程序」里双击我～', { name: 'DS 鲸鱼娘', ttl: 2000 })
+        setTimeout(() => shell.post('quit'), 220)
+      })
+      row3.append(toBall, quitApp)
+      box.append(row3, $('div', 'dshp-hint', '「收起」= 缩成贴边的悬浮小球；「关闭」= 真正退出这个桌面 App。'))
+    }
     box.append(
       row1,
       row2,

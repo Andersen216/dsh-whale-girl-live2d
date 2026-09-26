@@ -20,6 +20,22 @@ let WIN_W: CGFloat = 620
 let WIN_H: CGFloat = 560
 let K_X = "pet.win.x", K_Y = "pet.win.y", K_TOP = "pet.win.top"
 
+/// 插件资源目录：优先用「装进 profile 的那份」，找不到再按 App 包相对位置找，
+/// 这样不管 App 放在 dist/ 还是被拷到「应用程序」里都能定位到图标。
+let assetsPath: String = {
+    let profile = NSHomeDirectory() + "/.dsh/profiles/web/node_modules/dsh-whale-girl-live2d/assets"
+    if FileManager.default.fileExists(atPath: profile) { return profile }
+    let rel = Bundle.main.bundlePath + "/../../../../assets"
+    return (rel as NSString).standardizingPath
+}()
+
+/// 普通无边框窗口 canBecomeKey 默认是 false —— 表现就是「网页里能点、但打不出字」。
+/// 桌宠要能聊天，这个必须打开。
+final class PetWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     var win: NSWindow!
     var web: WKWebView!
@@ -31,10 +47,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     // 收起态：贴边悬浮小球
     var ball: NSWindow?
     var ballWeb: WKWebView?
+    var ballView: BallView?
     var ballDown = NSPoint.zero
     var ballAt = NSPoint.zero
     var ballMoved: CGFloat = 0
     var hiddenWatch: Timer?
+    var launchedAt = Date()
 
     var inside = false          // 鼠标当前是不是压在她（或她的面板）身上
     var downAt = NSPoint.zero   // 按下时的鼠标位置（屏幕坐标）
@@ -64,7 +82,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
         RunLoop.current.add(probe!, forMode: .common)
         // 页面里点「隐藏」→ 自动换成悬浮小球；这是她和壳子的约定
-        hiddenWatch = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        launchedAt = Date()
+        hiddenWatch = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             self?.checkHidden()
         }
         RunLoop.current.add(hiddenWatch!, forMode: .common)
@@ -75,7 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     // MARK: - 窗口
 
     func makeWindow() {
-        win = NSWindow(
+        win = PetWindow(
             contentRect: NSRect(x: 0, y: 0, width: WIN_W, height: WIN_H),
             styleMask: [.borderless], backing: .buffered, defer: false)
         win.isOpaque = false
@@ -94,6 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         // 出问题时只能靠这个看它卡在哪一步。
         let ucc = WKUserContentController()
         ucc.add(self, name: "dshpetlog")
+        ucc.add(self, name: "dshpetshell")   // 前端发指令：收起 / 展开 / 彻底退出
         let hook = """
         (function(){
           function send(t, a){
@@ -108,6 +128,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
           });
           window.addEventListener('error', function(e){ send('✗ window.onerror', [String(e.message) + ' @ ' + e.filename + ':' + e.lineno]) });
           window.addEventListener('unhandledrejection', function(e){ send('✗ unhandledrejection', [String(e.reason)]) });
+          // 告诉前端「我在桌面壳里」：设置页会因此多出「收起成小球 / 彻底关闭」两项
+          window.__DSHPET_SHELL__ = true;
+          // 网页面自己那个「鲸鱼娘」小把手在壳子里不需要（壳子有原生小球），
+          // 不藏掉的话收起时会先闪一下那个把手，看着很卡。
+          try{
+            var st = document.createElement('style');
+            st.textContent = 'body.dshp-pet-hidden .dshp-tab{display:none!important}';
+            (document.head || document.documentElement).appendChild(st);
+          }catch(e){}
         })()
         """
         ucc.addUserScript(WKUserScript(source: hook, injectionTime: .atDocumentStart, forMainFrameOnly: true))
@@ -154,13 +183,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         m.addItem(withTitle: "回到右下角", action: #selector(resetPos), keyEquivalent: "")
         m.addItem(withTitle: "收起成小球（贴边）", action: #selector(collapseToBall), keyEquivalent: "")
         m.addItem(withTitle: "展开桌宠", action: #selector(expandFromBall), keyEquivalent: "")
+        let sizeItem = m.addItem(withTitle: "小球大小", action: nil, keyEquivalent: "")
+        let sizeMenu = NSMenu()
+        for (title, sel) in [("小（28）", #selector(setBallSmall)), ("中（36）", #selector(setBallMedium)), ("大（48）", #selector(setBallLarge))] {
+            let it = sizeMenu.addItem(withTitle: title, action: sel, keyEquivalent: "")
+            it.target = self
+        }
+        sizeItem.submenu = sizeMenu
+        m.addItem(withTitle: "安装到「应用程序」（之后可双击打开）", action: #selector(installApp), keyEquivalent: "")
         let top = m.addItem(withTitle: "总在最前", action: #selector(toggleTop), keyEquivalent: "")
         top.state = (UserDefaults.standard.object(forKey: K_TOP) as? Bool ?? true) ? .on : .off
         m.addItem(.separator())
         m.addItem(withTitle: "打开自检页（浏览器）", action: #selector(openDiag), keyEquivalent: "")
         m.addItem(withTitle: "打开 DSH 插件设置目录", action: #selector(openHome), keyEquivalent: "")
         m.addItem(.separator())
-        m.addItem(withTitle: "退出桌宠", action: #selector(quit), keyEquivalent: "q")
+        m.addItem(withTitle: "彻底退出桌宠", action: #selector(quitNow), keyEquivalent: "q")
         for it in m.items { it.target = self }
         status.menu = m
     }
@@ -183,6 +220,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             winAt = win.frame.origin
             moved = 0
             shellDrag = false
+            // 点她 = 想跟她说话：把 App 激活、窗口变 key、焦点交给网页，
+            // 否则无边框窗口收不到键盘事件（「能点但打不了字」就是这么来的）
+            NSApp.activate(ignoringOtherApps: true)
+            win.makeKeyAndOrderFront(nil)
+            win.makeFirstResponder(web)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                guard let self else { return }
+                self.log("键盘自检：isKeyWindow=\(self.win.isKeyWindow) firstResponder=\(String(describing: self.win.firstResponder))")
+            }
             return e
 
         case .leftMouseDragged:
@@ -299,16 +345,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             self?.log("页面加载完成 → \(v as? String ?? "?")")
         }
         clearBackdrops(web)
+        win.makeFirstResponder(web)
         // 启动时一定先把她展开：上次退出时如果是「隐藏」状态，页面会带着 hidden 类回来，
         // 壳子会立刻收成小球 —— 主人会以为「人没了」。先把状态清掉，要收再自己收。
-        web.evaluateJavaScript("window.DSHPet && DSHPet.setHidden && DSHPet.setHidden(false)",
-                               completionHandler: nil)
+        // 页面启动是异步的：它读完保存的布局后可能又把自己设成 hidden，
+        // 所以启动后连补几次「展开」，确保主人一开 App 就能看到她。
+        for delay in [0.8, 2.0, 4.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.web.evaluateJavaScript("window.DSHPet && DSHPet.setHidden && DSHPet.setHidden(false)",
+                                             completionHandler: nil)
+            }
+        }
         startHealthChecks()
     }
 
     /// 页面里的 console / 报错转发过来的入口
     func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage) {
-        if message.name == "dshpetlog" { log(String(describing: message.body)) }
+        if message.name == "dshpetlog" { log(String(describing: message.body)); return }
+        guard message.name == "dshpetshell" else { return }
+        // 前端 → 壳子的即时指令。走消息而不是轮询页面状态：
+        // 点「收起」立刻开始动画，没有 0.5 秒的延迟感。
+        switch String(describing: message.body) {
+        case "hidden", "collapse": collapseToBall()
+        case "shown", "expand": expandFromBall()
+        case "quit": quitNow()
+        default: log("壳子收到未知指令：\(message.body)")
+        }
+    }
+
+    /// 彻底退出（设置页里的「彻底关闭桌宠应用」也走这里）
+    @objc func quitNow() {
+        log("收到退出指令，正在关闭桌宠")
+        UserDefaults.standard.synchronize()
+        NSApp.terminate(nil)
+    }
+
+    /// 把自己拷到「应用程序」，之后就能像普通 App 一样双击打开（Launchpad / 聚焦都能搜到）
+    @objc func installApp() {
+        let src = Bundle.main.bundlePath
+        let dir = NSHomeDirectory() + "/Applications"
+        let dest = dir + "/" + (src as NSString).lastPathComponent
+        do {
+            try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            if FileManager.default.fileExists(atPath: dest) { try FileManager.default.removeItem(atPath: dest) }
+            try FileManager.default.copyItem(atPath: src, toPath: dest)
+            log("已安装到「应用程序」：\(dest)")
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: dest)])
+        } catch {
+            log("安装到「应用程序」失败：\(error.localizedDescription)")
+        }
     }
 
     /// 每 6 秒问一次页面「你到哪一步了」：模型有没有加载出来、事件流连上没有。
