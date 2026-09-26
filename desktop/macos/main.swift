@@ -89,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         installMonitors()
         restorePosition()
         win.orderFrontRegardless()
+        ensureVisible()
         load()
         probe = Timer.scheduledTimer(withTimeInterval: 0.09, repeats: true) { [weak self] _ in
             self?.updateHit()
@@ -706,18 +707,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func restorePosition() {
         let d = UserDefaults.standard
-        if d.object(forKey: K_X) != nil {
-            let p = NSPoint(x: d.double(forKey: K_X), y: d.double(forKey: K_Y))
-            let r = NSRect(origin: p, size: win.frame.size)
-            if NSScreen.screens.contains(where: { $0.frame.intersects(r) }) {
-                win.setFrameOrigin(p)
-                return
-            }
+        guard d.object(forKey: K_X) != nil else { return resetPos() }
+        var p = NSPoint(x: d.double(forKey: K_X), y: d.double(forKey: K_Y))
+        // ⚠️ 这里必须「整个窗口都在可见区域里」，不只是「跟屏幕有交集」。
+        // 踩过的坑：窗口从 560×620 放大到 900×760，旧坐标没变 ——
+        // 窗口往右下长大，而她待在窗口**右下角**，于是被整个推到屏幕外，
+        // 表现就是「怎么点都看不见她」，而且退出重开也没用（坐标存在偏好里）。
+        if let vf = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame {
+            p.x = min(max(p.x, vf.minX + 8), max(vf.minX + 8, vf.maxX - WIN_W - 8))
+            p.y = min(max(p.y, vf.minY + 8), max(vf.minY + 8, vf.maxY - WIN_H - 8))
         }
-        resetPos()
+        win.setFrameOrigin(p)
+        log("恢复位置 → (\(Int(p.x)),\(Int(p.y))) 窗口 \(Int(WIN_W))×\(Int(WIN_H))")
     }
 
     // MARK: - 菜单动作
+
+    /// 兜底自检：窗口（尤其是她所在的右下角那块）必须在屏幕可见范围内，否则搬回来
+    func ensureVisible() {
+        guard let vf = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else { return }
+        let f = win.frame
+        if f.maxX > vf.maxX || f.minX < vf.minX || f.maxY > vf.maxY || f.minY < vf.minY {
+            log("窗口跑到屏幕外了（\(Int(f.minX)),\(Int(f.minY)) \(Int(f.width))×\(Int(f.height))）→ 搬回右下角")
+            resetPos()
+        }
+    }
 
     @objc func reload() { load() }
 
