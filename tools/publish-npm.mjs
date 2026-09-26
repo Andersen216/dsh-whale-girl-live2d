@@ -2,7 +2,8 @@
 // 发到 npm：一条命令搞定「预检 → 发布 → 回查」，并且不碰你本机的 ~/.npm 缓存。
 //
 // 用法：
-//   NPM_TOKEN=npm_xxx node tools/publish-npm.mjs            # 真发布
+//   NPM_TOKEN=npm_xxx node tools/publish-npm.mjs                 # 真发布
+//   NPM_TOKEN=npm_xxx node tools/publish-npm.mjs --otp=123456    # 需要 2FA 时补验证码
 //   NPM_TOKEN=npm_xxx node tools/publish-npm.mjs --check    # 只预检，不发布
 //
 // 为什么要单独写一个：这台机器的 ~/.npm 里有 root 权限的旧缓存文件，直接 npm publish
@@ -16,6 +17,10 @@ import path from 'node:path';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const CHECK_ONLY = process.argv.includes('--check');
+// npm 从 2026-07 起收紧 bypass-2FA token：没有 bypass 的 token 发布时必须补一次 2FA 验证码。
+// 用法：--otp=123456（验证器里的 6 位数，30 秒一换）
+const OTP = (process.argv.find((a) => a.startsWith('--otp=')) || '').split('=')[1]
+  || (process.argv.includes('--otp') ? process.argv[process.argv.indexOf('--otp') + 1] : null);
 const TOKEN = process.env.NPM_TOKEN || process.env.NODE_AUTH_TOKEN;
 const REGISTRY = 'https://registry.npmjs.org';
 
@@ -76,10 +81,12 @@ if (!TOKEN) {
   process.exit(2);
 }
 console.log('\n=== 发布 ===');
+if (OTP) info(`带 2FA 验证码发布（otp=${OTP.replace(/./g, '•')}）`);
 try {
   const out = execFileSync('npm', [
     'publish', '--access', 'public', '--cache', CACHE,
     `--//registry.npmjs.org/:_authToken=${TOKEN}`,
+    ...(OTP ? [`--otp=${OTP}`] : []),
   ], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   console.log(out.trim().split('\n').slice(-4).join('\n'));
   ok('npm publish 成功');

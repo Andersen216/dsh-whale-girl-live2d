@@ -14,7 +14,7 @@
  *
  * 想「以后一直能发新版本」：把 token 存进 macOS 钥匙串一次即可（本脚本会自动读）：
  *   security add-generic-password -a Andersen216 -s dsh-whale-girl-live2d-publish -w
- * 之后更新版本只要两步：改代码 → `npm run publish`。
+ * 之后更新版本只要两步：改代码 → `npm run release:github`。
  * token 只从环境变量读，不落盘、不写进 git config、不打日志。
  */
 

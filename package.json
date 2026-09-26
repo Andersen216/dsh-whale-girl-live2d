@@ -29,7 +29,7 @@
     "LICENSE"
   ],
   "bin": {
-    "dsh-pet": "./tools/pet-ctl.mjs"
+    "dsh-pet": "tools/pet-ctl.mjs"
   },
   "scripts": {
     "build:model": "node tools/build-model.mjs",
@@ -43,8 +43,10 @@
     "test:e2e:ui": "node tools/ui-probe.mjs",
     "test:catalog": "node tools/catalog-test.mjs",
     "repro:stuck": "node tools/repro-stuck.mjs",
-    "publish:check": "node tools/publish.mjs --check",
-    "publish": "node tools/publish.mjs"
+    "release:check": "node tools/publish.mjs --check",
+    "release:github": "node tools/publish.mjs",
+    "release:npm": "node tools/publish-npm.mjs",
+    "release:npm:check": "node tools/publish-npm.mjs --check"
   },
   "dsh": {
     "bundle": {

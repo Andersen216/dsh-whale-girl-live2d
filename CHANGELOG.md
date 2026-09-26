@@ -182,7 +182,7 @@ pixi-live2d-display 每帧的顺序是：动作写入 → `saveParameters()` 存
   鲸鱼娘桌宠占用**，撞名会导致市场装错包。
 - 署名：**Andersen216**（插件作者）；模型/角色：上善无形、ZipZipPipe、氵六青（CC BY-NC-SA 4.0，非商业）。
 - 新增 `AUTHORS.md`、`docs/发布到插件市场.md`、`docs/投稿条目.yml`、
-  `npm run publish` / `npm run publish:check`（一条命令建仓库 + 推代码 + 提市场 PR）。
+  `npm run release:github` / `npm run release:check`（一条命令建仓库 + 推代码 + 提市场 PR）。
 
 ### 新增测试与工具
 
