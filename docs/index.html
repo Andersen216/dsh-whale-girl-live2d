@@ -3,172 +3,159 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DS 鲸鱼娘 · DSH 里的 Live2D 桌宠</title>
-<meta name="description" content="DSH（DeepSeek Harness）里的 Live2D 鲸鱼娘桌宠：网页版（全平台）+ 桌面版（macOS）。跟着 agent 的真实状态动，点一下就能跟 agent 说话。">
+<title>DS 鲸鱼娘 · 电脑上的 Live2D 桌宠</title>
+<meta name="description" content="DSH（DeepSeek Harness）里的 Live2D 鲸鱼娘桌宠：网页版全平台通用，另有 macOS / Windows 桌面客户端。免费开源、非商业。">
 <style>
-  :root{
-    --blue:#3b62f6; --blue-2:#7b9bff; --deep:#16224a; --ink:#0f1730;
-    --card:rgba(255,255,255,.78); --line:rgba(20,30,70,.10); --muted:#5b6684;
-  }
-  @media (prefers-color-scheme: dark){
-    :root{ --ink:#eef2ff; --card:rgba(24,30,52,.72); --line:rgba(255,255,255,.14); --muted:#9aa6c8;
-           --deep:#0a1024; }
-  }
+  :root{--blue:#3b62f6;--blue2:#7b9bff;--muted:#9fb0dd;--line:rgba(255,255,255,.16);--card:rgba(255,255,255,.08)}
   *{box-sizing:border-box}
-  body{
-    margin:0; color:var(--ink); font:16px/1.75 -apple-system,BlinkMacSystemFont,"SF Pro SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  html,body{margin:0}
+  body{color:#eef2ff;font:16px/1.7 -apple-system,BlinkMacSystemFont,"SF Pro SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
     background:
-      radial-gradient(1200px 600px at 15% -10%, rgba(123,155,255,.35), transparent 60%),
-      radial-gradient(900px 500px at 95% 0%, rgba(59,98,246,.22), transparent 55%),
-      linear-gradient(180deg, var(--deep), color-mix(in srgb, var(--deep) 70%, #000) 60%);
-    background-attachment:fixed; min-height:100vh;
-  }
-  .wrap{max-width:1000px;margin:0 auto;padding:0 20px 80px}
-  header{text-align:center;padding:72px 0 34px}
-  h1{font-size:clamp(30px,5vw,46px);line-height:1.2;margin:0 0 12px;letter-spacing:-.02em;
-     background:linear-gradient(120deg,#fff,#cfe0ff);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .sub{color:#c9d6ff;font-size:clamp(15px,2.2vw,18px);margin:0 auto;max-width:660px}
-  .btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:28px 0 0}
-  a.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 20px;border-radius:14px;text-decoration:none;
-        font-weight:600;transition:transform .18s ease,box-shadow .18s ease,background .18s ease}
-  a.btn:hover{transform:translateY(-2px)}
-  a.primary{background:linear-gradient(180deg,var(--blue-2),var(--blue));color:#fff;box-shadow:0 10px 26px rgba(59,98,246,.42)}
-  a.ghost{background:rgba(255,255,255,.12);color:#eaf0ff;border:1px solid rgba(255,255,255,.22);backdrop-filter:blur(10px)}
-  .shot{margin:38px auto 0;max-width:820px;border-radius:22px;overflow:hidden;
-        box-shadow:0 30px 70px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.16)}
-  .shot img{display:block;width:100%;height:auto}
-  h2{font-size:clamp(20px,3vw,26px);margin:64px 0 16px;letter-spacing:-.01em}
-  .cards{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-  @media (max-width:760px){.cards{grid-template-columns:1fr}}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px 22px 18px;
-        backdrop-filter:blur(18px) saturate(150%)}
-  .card h3{margin:0 0 4px;font-size:18px}
-  .tag{display:inline-block;font-size:12px;padding:3px 10px;border-radius:999px;margin-bottom:10px;
-       background:rgba(59,98,246,.14);color:var(--blue)}
-  .card ul{margin:10px 0 0;padding-left:18px;color:var(--muted);font-size:15px}
-  .card li{margin:4px 0}
-  .note{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--blue);
-        border-radius:14px;padding:16px 18px;margin:18px 0;backdrop-filter:blur(14px)}
-  .note b{color:var(--blue)}
-  pre{background:rgba(10,16,36,.86);color:#dbe6ff;border:1px solid var(--line);border-radius:14px;
-      padding:14px 16px;overflow:auto;font:13px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace}
-  ol.steps{list-style:none;counter-reset:s;padding:0;margin:14px 0}
-  ol.steps li{counter-increment:s;position:relative;padding:12px 0 12px 52px;border-bottom:1px solid var(--line)}
-  ol.steps li:last-child{border-bottom:none}
-  ol.steps li::before{content:counter(s);position:absolute;left:0;top:12px;width:32px;height:32px;border-radius:50%;
-      display:grid;place-items:center;font-weight:700;color:#fff;
-      background:linear-gradient(180deg,var(--blue-2),var(--blue))}
-  details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 16px;margin:10px 0}
+      radial-gradient(1100px 620px at 12% -8%, rgba(123,155,255,.40), transparent 62%),
+      radial-gradient(900px 520px at 96% 4%, rgba(59,98,246,.30), transparent 58%),
+      linear-gradient(180deg,#101a42,#070b1c 62%);
+    background-attachment:fixed;min-height:100vh}
+  .wrap{max-width:960px;margin:0 auto;padding:0 22px 72px}
+  header{text-align:center;padding:64px 0 8px}
+  h1{font-size:clamp(30px,5.2vw,50px);line-height:1.15;margin:0 0 14px;letter-spacing:-.02em}
+  .lead{font-size:clamp(15px,2.2vw,19px);color:#c7d4ff;max-width:640px;margin:0 auto}
+  .badge{display:inline-block;margin:16px 0 0;font-size:13px;padding:4px 12px;border-radius:999px;
+    background:rgba(123,155,255,.16);color:#cfe0ff}
+  .dl{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:34px 0 10px}
+  @media(max-width:700px){.dl{grid-template-columns:1fr}}
+  a.dlbtn{display:flex;align-items:center;gap:14px;padding:20px 22px;border-radius:20px;text-decoration:none;
+    color:#fff;border:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.06));
+    transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+  a.dlbtn:hover{transform:translateY(-3px);box-shadow:0 16px 36px rgba(0,0,0,.34);border-color:rgba(255,255,255,.34)}
+  a.dlbtn.primary{background:linear-gradient(180deg,var(--blue2),var(--blue));border-color:transparent;
+    box-shadow:0 12px 30px rgba(59,98,246,.42)}
+  a.dlbtn .ico{font-size:30px;line-height:1}
+  a.dlbtn .t{font-weight:650;font-size:17px}
+  a.dlbtn .s{font-size:12.5px;opacity:.78;margin-top:2px}
+  .cmd{margin:16px auto 0;max-width:660px;text-align:center;font-size:13.5px;color:#a9b8e6}
+  .cmd code{background:rgba(127,150,255,.16);padding:3px 8px;border-radius:8px;color:#dbe6ff;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;word-break:break-all}
+  .shot{margin:30px auto 0;max-width:780px;border-radius:22px;overflow:hidden;
+    box-shadow:0 26px 60px rgba(0,0,0,.45);border:1px solid var(--line)}
+  .shot img{display:block;width:100%}
+  h2{font-size:clamp(19px,3vw,25px);margin:58px 0 14px;letter-spacing:-.01em}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:700px){.cards{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);border-radius:18px;padding:20px;background:var(--card)}
+  .card h3{margin:0 0 8px;font-size:17px}
+  .card ul{margin:8px 0 0;padding-left:18px;color:#c3cff0;font-size:15px}
+  .steps{counter-reset:s;list-style:none;padding:0;margin:12px 0}
+  .steps li{counter-increment:s;position:relative;padding:12px 0 12px 50px;border-bottom:1px solid var(--line)}
+  .steps li:last-child{border-bottom:0}
+  .steps li::before{content:counter(s);position:absolute;left:0;top:12px;width:30px;height:30px;border-radius:50%;
+    display:grid;place-items:center;font-weight:700;background:linear-gradient(180deg,var(--blue2),var(--blue))}
+  pre{background:rgba(6,10,26,.86);border:1px solid var(--line);border-radius:12px;padding:12px 14px;overflow:auto;
+    font:12.5px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;color:#dbe6ff}
+  .note{border:1px solid var(--line);border-left:4px solid var(--blue2);border-radius:14px;padding:14px 16px;margin:16px 0;
+    background:var(--card);color:#cfdaf8;font-size:15px}
+  details{border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:9px 0;background:var(--card)}
   summary{cursor:pointer;font-weight:600}
-  details p,details ul{color:var(--muted);margin:10px 0 4px}
-  footer{text-align:center;color:#a9b6dd;font-size:13px;padding:56px 0 0;line-height:1.9}
+  details p{color:#c3cff0;margin:10px 0 2px;font-size:15px}
+  code{background:rgba(127,150,255,.16);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media(max-width:700px){.grid3{grid-template-columns:1fr}}
+  .grid3 img{width:100%;border-radius:14px;border:1px solid var(--line);display:block}
+  footer{text-align:center;color:var(--muted);font-size:13px;padding:52px 0 0;line-height:1.9}
   footer a{color:#cfdcff}
-  code{background:rgba(127,150,255,.16);padding:2px 6px;border-radius:6px;font-size:14px}
-  .grid2{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-  @media (max-width:760px){.grid2{grid-template-columns:1fr}}
-  .grid2 img{width:100%;border-radius:14px;border:1px solid var(--line);display:block}
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <header>
-    <h1>🐋 DS 鲸鱼娘</h1>
-    <p class="sub">DSH（DeepSeek Harness）里的 Live2D 桌宠 —— 她不是贴图：思考、查资料、写文件、报错、收工，她都在跟着 agent 的真实状态动。点一下就能直接跟 agent 说话。</p>
-    <div class="btns">
-      <a class="btn primary" href="https://github.com/Andersen216/dsh-whale-girl-live2d/releases/latest/download/DS-WhaleGirl-Pet-macOS-0.4.0.zip">⬇️ 下载桌面版（macOS）</a>
-      <a class="btn ghost" href="https://github.com/Andersen216/dsh-whale-girl-live2d">GitHub 仓库</a>
+    <h1>🐋 电脑上养了只鲸鱼娘</h1>
+    <p class="lead">她会跟着 AI 一起干活：我思考她翻本子，我查资料她戴眼镜，我写完她伸懒腰。<br>
+      点她一下就能跟 AI 说话，右键是钱包。</p>
+    <span class="badge">免费 · 开源 · 非商业</span>
+
+    <div class="dl">
+      <a class="dlbtn primary" href="https://github.com/Andersen216/dsh-whale-girl-live2d/releases/latest">
+        <span class="ico">🪟</span>
+        <span><span class="t">Windows 客户端（.exe）</span>
+        <span class="s">下载安装包 · 里面能一键装插件</span></span>
+      </a>
+      <a class="dlbtn" href="https://github.com/Andersen216/dsh-whale-girl-live2d/releases/latest/download/DS-WhaleGirl-Pet-macOS.zip">
+        <span class="ico">🍎</span>
+        <span><span class="t">macOS 客户端（.zip）</span>
+        <span class="s">解压后拖进「应用程序」</span></span>
+      </a>
     </div>
+    <p class="cmd">不想装客户端？网页版一条命令即可（Windows / Mac 通用）：<br>
+      <code>dsh plugin --profile web add github:Andersen216/dsh-whale-girl-live2d</code></p>
   </header>
 
-  <div class="shot"><img src="screenshots/01-待机.jpg" alt="鲸鱼娘待在 DSH 界面右下角"></div>
+  <div class="shot"><img src="screenshots/01-待机.jpg" alt="鲸鱼娘待在界面右下角"></div>
 
-  <h2>先弄清楚：只有一套插件，两种用法</h2>
+  <h2>三步装好（顺序随便，但缺插件一定不行）</h2>
+  <ol class="steps">
+    <li><b>装插件</b> —— 上面那条命令；或者装完客户端后，点客户端里的「一键安装插件」<br>
+      <span style="color:#9fb0dd;font-size:14px">插件是本体：模型、动作、跟 AI 的联动、菜单、钱包全在里面</span></li>
+    <li><b>重启 DSH</b> —— 宿主插件只在启动时加载（这一步最容易漏）</li>
+    <li><b>打开客户端</b> —— 她就出现了。连不上她会每 5 秒自动重试，不用重启客户端</li>
+  </ol>
+
   <div class="note">
-    <b>插件只有一个</b>（<code>dsh-whale-girl-live2d</code>）。装一次，网页版和桌面版<b>共用同一份</b> ——
-    模型、动作、表情、联动、菜单、钱包全在插件里。<br>
-    <b>桌面版</b>只是额外下载一个 1.4 MB 的 macOS 外壳 App，把同一页放进桌面上的独立窗口。
-    <b>它不是第二个插件。</b>
+    🐋 <b>客户端和网页版是同一套东西的两层</b>：插件只有一个，装一次两边共用。
+    客户端只是个 1~3 MB 的小窗口（透明、置顶、点击穿透、能贴边收成小球），
+    <b>它不带模型、也不带联动</b> —— 所以少了插件，它只会显示一张「正在找 DSH…」的提示卡。
   </div>
 
+  <h2>两种用法</h2>
   <div class="cards">
     <div class="card">
-      <span class="tag">必装 · 全平台</span>
-      <h3>🖥 网页版</h3>
+      <h3>🖥 网页版（全平台）</h3>
       <ul>
-        <li>她住在 DSH Web 界面右下角</li>
+        <li>她住在 DSH 界面右下角</li>
         <li>Windows / macOS / Linux 都能用</li>
-        <li>只需要装插件，一条命令</li>
-        <li>浏览器标签页开着就能看到她</li>
+        <li>只要装插件，刷新页面就有</li>
       </ul>
     </div>
     <div class="card">
-      <span class="tag">可选 · 仅 macOS</span>
-      <h3>🐋 桌面版</h3>
+      <h3>🐋 桌面客户端（Win / Mac）</h3>
       <ul>
-        <li>她住在<b>你的桌面上</b>：透明、无边框、永远置顶</li>
-        <li><b>点击穿透</b> —— 鼠标压在她身上才收事件，不挡你干活</li>
-        <li>拖她 = 拖窗口；收起会变成<b>贴边悬浮球</b></li>
-        <li>菜单栏 🐋 控制；浏览器可以关掉</li>
+        <li>她住在<b>你的桌面上</b>：独立窗口、永远置顶</li>
+        <li><b>点击穿透</b>：不挡你干活</li>
+        <li>拖她 = 拖窗口；收起变<b>贴边小球</b></li>
+        <li>托盘 / 菜单栏图标控制，浏览器可以关掉</li>
       </ul>
     </div>
-  </div>
-
-  <h2>安装：两条路都行</h2>
-
-  <div class="card">
-    <h3>🅰 先网页版，再桌面版（推荐）</h3>
-    <ol class="steps">
-      <li>装插件：<pre>dsh plugin --profile web add github:Andersen216/dsh-whale-girl-live2d</pre></li>
-      <li><b>重启 DSH</b>，然后刷新页面 —— 右下角出现她 = 网页版成功</li>
-      <li>自检：访问 <code>http://127.0.0.1:3080/dsh-pet/pet.js</code>，返回 <b>401</b> 就是挂上了</li>
-      <li>下载上面的 macOS zip → 解压 → 把 <b>DS 鲸鱼娘桌宠.app</b> 拖进「应用程序」</li>
-      <li>双击打开 —— 菜单栏会出现 🐋，她就落在你桌面上了</li>
-    </ol>
-  </div>
-
-  <div class="card" style="margin-top:14px">
-    <h3>🅱 先桌面版，再网页版（也可以）</h3>
-    <ol class="steps">
-      <li>先下载 zip、拖进「应用程序」、双击 —— 窗口里会显示「🐋 正在找 DSH…」<br>
-          <span style="color:var(--muted);font-size:14px">这是<b>正常的</b>，因为插件还没装</span></li>
-      <li>再按 🅰 的第 1~3 步装插件并重启 DSH</li>
-      <li>她<b>自己出现</b>，不用重启 App（App 每 5 秒自动重试一次）</li>
-    </ol>
-  </div>
-
-  <div class="note">
-    ⚠️ 顺序无所谓，但<b>少了插件一定不行</b>：桌面 App 本身不带模型、不带联动（所以它只有 1.4 MB），
-    它只是一个窗口，内容全在插件里。Windows / Linux 用户用<b>网页版</b>即可，功能完全一样。
   </div>
 
   <h2>她长什么样</h2>
-  <div class="grid2">
+  <div class="grid3">
     <img src="screenshots/02-右键菜单.jpg" alt="右键菜单">
-    <img src="screenshots/03-钱包HUD.jpg" alt="钱包 HUD">
-    <img src="screenshots/04-跟着干活.jpg" alt="跟着 agent 干活">
+    <img src="screenshots/03-钱包HUD.jpg" alt="钱包">
+    <img src="screenshots/04-跟着干活.jpg" alt="跟着干活">
   </div>
 
-  <h2>出问题怎么查</h2>
-  <details><summary>桌面 App 里显示「正在找 DSH…」</summary>
-    <p>说明插件没装、DSH 没跑，或者插件被停用了。先确认 <code>curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3080/dsh-pet/pet.js</code> 返回 <b>401</b>。</p></details>
-  <details><summary>返回 404（她也整个消失了）</summary>
-    <p>插件没被注册，或者<b>在插件设置里被停用了</b>。检查
-    <code>~/.dsh/profiles/web/cordis.patch.yml</code> 里有没有
-    <code>- id: dsh-live2d-pet</code> 加 <code>disabled: true</code>，有就把这两行删掉再重启 DSH。</p></details>
-  <details><summary>双击 App 好像没反应</summary>
-    <p>它是<b>无 Dock 图标</b>的后台型 App，可能已经在跑了 —— 看菜单栏右上角的 🐋；再双击一次会把窗口叫到最前面。</p></details>
-  <details><summary>更新了但没变化</summary>
-    <p>pnpm 会按 lockfile 记住旧 commit：<code>dsh plugin --profile web update dsh-whale-girl-live2d</code>，
-    不行就 remove 再 add。</p></details>
+  <h2>出问题这么查</h2>
+  <details><summary>客户端显示「正在找 DSH…」</summary>
+    <p>三种可能：插件没装 / DSH 没运行 / 插件在设置里被停用了。点客户端里的「一键安装插件」，然后重启 DSH。
+    自检：<code>curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3080/dsh-pet/pet.js</code>
+    返回 <b>401</b> 就是好的。</p></details>
+  <details><summary>返回 404，她也整个消失</summary>
+    <p>看 <code>~/.dsh/profiles/web/cordis.patch.yml</code> 里有没有 <code>- id: dsh-live2d-pet</code> 加
+    <code>disabled: true</code>，有就把这两行删掉再重启 DSH。</p></details>
+  <details><summary>Windows 安装包在哪里？</summary>
+    <p>在 <a href="https://github.com/Andersen216/dsh-whale-girl-live2d/releases/latest">Releases</a> 里，
+    文件名 <code>DS-WhaleGirl-Pet-Windows-Setup.exe</code>。它由 GitHub Actions 在 Windows 机器上编译，
+    如果暂时还没有，可以先按 README 自己编译，或者先用网页版。</p></details>
+  <details><summary>她觉得卡 / 笔记本发烫</summary>
+    <p>切到「低性能模式」（托盘 / 菜单栏图标里）：不自己找戏、不自言自语，只眨眼和轻微摆动，点了她才动。省电明显。</p></details>
 
   <footer>
     <p>代码 MIT © 2026 <a href="https://github.com/Andersen216">Andersen216</a> ·
-    模型素材 CC BY-NC-SA 4.0（非商业）· 角色形象：上善无形 / ZipZipPipe / 氵六青</p>
-    <p><a href="https://github.com/Andersen216/dsh-whale-girl-live2d">GitHub</a> ·
-       <a href="https://github.com/Andersen216/dsh-whale-girl-live2d/releases">Releases</a> ·
-       <a href="https://github.com/Andersen216/dsh-whale-girl-live2d/blob/main/desktop/README.md">桌面版技术说明</a></p>
-    <p>本项目完全免费、非商业：不收费、不带货、不接广告变现。</p>
+      模型素材 CC BY-NC-SA 4.0（非商业）· 角色形象：上善无形 / ZipZipPipe / 氵六青</p>
+    <p><a href="https://github.com/Andersen216/dsh-whale-girl-live2d">GitHub 仓库</a> ·
+       <a href="https://github.com/Andersen216/dsh-whale-girl-live2d/releases">下载</a> ·
+       <a href="https://github.com/Andersen216/dsh-whale-girl-live2d/blob/main/desktop/README.md">macOS 版说明</a> ·
+       <a href="https://github.com/Andersen216/dsh-whale-girl-live2d/blob/main/desktop/windows/README.md">Windows 版说明</a></p>
+    <p>完全免费：不收费、不带货、不接广告变现。</p>
   </footer>
 </div>
 </body>
