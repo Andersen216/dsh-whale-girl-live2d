@@ -87,12 +87,23 @@ final class BallView: NSView {
         CATransaction.commit()
     }
 
+    /// 悬停放大。
+    /// 踩过的坑：之前写成 `self.animator().layoutBall(scale:)` —— 动画代理处理不了
+    /// 自定义方法签名，鼠标一碰到小球就 **段错误崩溃**（崩溃报告里就是这一帧）。
+    /// 现在只对标准属性（NSView.frame）做动画，圆角直接设值。
     private func animate(scale: CGFloat) {
+        let d = diameter * scale
+        let c = NSPoint(x: bounds.midX, y: bounds.midY)
+        let eFrame = NSRect(x: c.x - d / 2, y: c.y - d / 2, width: d, height: d)
+        let s = d * 0.52
+        let iFrame = NSRect(x: (d - s) / 2, y: (d - s) / 2, width: s, height: s)
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.14
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            self.animator().layoutBall(scale: scale)
+            self.effect.animator().frame = eFrame
+            self.icon.animator().frame = iFrame
         }
+        effect.layer?.cornerRadius = d / 2
     }
 }
 
@@ -200,7 +211,7 @@ extension AppDelegate {
             NSAnimationContext.runAnimationGroup { ctx in
                 ctx.duration = 0.26
                 ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                b.animator().setFrameOrigin(target)
+                b.animator().setFrame(NSRect(origin: target, size: b.frame.size), display: true)
             }
         } else {
             b.setFrameOrigin(target)

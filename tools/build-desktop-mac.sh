@@ -37,7 +37,8 @@ swiftc -O -swift-version 5 \
   -o "$TMP_APP/Contents/MacOS/$BIN" "$SRC" "$ROOT/desktop/macos/ball.swift"
 
 echo "③ 图标（蓝底圆角框 + 她的平常脸立绘）"
-ICON="$ROOT/assets/model/icon.png"
+ICON="$ROOT/desktop/icon-source.png"          # 从她的实拍里裁的 Q 版正脸
+[ -f "$ICON" ] || ICON="$ROOT/assets/model/icon.png"
 if [ -f "$ICON" ] && command -v swiftc >/dev/null; then
   TMPICON="$(mktemp -d)"
   if swiftc -O -o "$TMPICON/mkicon" "$ROOT/tools/make-appicon.swift" 2>/dev/null; then

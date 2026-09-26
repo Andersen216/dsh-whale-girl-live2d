@@ -53,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     var ballMoved: CGFloat = 0
     var hiddenWatch: Timer?
     var launchedAt = Date()
+    var failCount = 0
 
     var inside = false          // 鼠标当前是不是压在她（或她的面板）身上
     var downAt = NSPoint.zero   // 按下时的鼠标位置（屏幕坐标）
@@ -346,6 +347,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         w.evaluateJavaScript("document.title + ' | DSHPet=' + (window.DSHPet ? 'yes' : 'no')") {
             [weak self] v, _ in
             self?.log("页面加载完成 → \(v as? String ?? "?")")
+            if (v as? String ?? "").contains("DSHPet=yes") { self?.failCount = 0 }
         }
         clearBackdrops(web)
         win.makeFirstResponder(web)
@@ -477,6 +479,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func webView(_ w: WKWebView, didFailProvisionalNavigation nav: WKNavigation!, withError e: Error) {
         log("加载失败：\(e.localizedDescription) —— 5 秒后重试")
+        failCount += 1
+        if failCount >= 3 {
+            showHint("没连上 DSH（\(PET_URL)）。<br>请确认：① 插件已装好 ② DSH 正在运行。<br>连上之后她会自动出现。")
+        }
         retry(after: 5)
     }
 
@@ -627,6 +633,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
     }
 
+    /// DSH 没起来时给一张可读的提示页（透明窗口里一片空白，用户不知道发生了什么）
+    func showHint(_ detail: String) {
+        let html = """
+        <!doctype html><meta charset="utf-8"><style>
+        html,body{margin:0;height:100%;background:transparent}
+        body{display:flex;align-items:center;justify-content:center;
+          font:13px/1.7 -apple-system,"PingFang SC",sans-serif;color:#fff;text-align:center}
+        .box{background:rgba(18,22,34,.88);border:1px solid rgba(255,255,255,.18);
+          border-radius:14px;padding:16px 20px;max-width:78%;backdrop-filter:blur(8px)}
+        .t{font-weight:600;margin-bottom:6px;font-size:14px}
+        .s{opacity:.72;font-size:12px}
+        </style><body><div class="box">
+        <div class="t">🐋 正在找 DSH…</div>
+        <div class="s">\(detail)</div></div></body>
+        """
+        web.loadHTMLString(html, baseURL: nil)
+    }
+
     /// DSH 还没启动 / 正在重启时不至于一片空白：过几秒自己再试
     func retry(after seconds: Double = 5) {
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in self?.load() }
@@ -653,6 +677,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     // MARK: - 菜单动作
 
     @objc func reload() { load() }
+
+    /// 双击一个「已经在运行」的 App 时系统不会新起进程，只会激活它 ——
+    /// 我们是后台型 App（无 Dock 图标），如果什么都不做，用户会以为「打不开」。
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if let b = ball, b.isVisible { expandFromBall() }
+        if !NSScreen.screens.contains(where: { $0.visibleFrame.intersects(win.frame) }) { resetPos() }
+        win.orderFrontRegardless()
+        log("用户又点了一次图标 → 把桌宠叫到前面")
+        return true
+    }
 
     @objc func resetPos() {
         guard let vf = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else { return }

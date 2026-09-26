@@ -6,6 +6,9 @@
   <string>WhaleGirlPet</string>
   <key>CFBundleDisplayName</key>
   <string>DS 鲸鱼娘桌宠</string>
+  <!-- 不写这一行的话，Resources 里的 icon.icns 根本不会被使用（「App 没有图标」就是这个原因） -->
+  <key>CFBundleIconFile</key>
+  <string>icon.icns</string>
   <key>CFBundleExecutable</key>
   <string>WhaleGirlPet</string>
   <key>CFBundleIdentifier</key>
