@@ -795,8 +795,9 @@ async function main() {
     const alignLeft = headAlign[0] || {}
     const alignRight = headAlign[2] || {}
     check(
-      '在屏幕中间时，聊天框正对她的头顶',
-      alignMid.offBy !== undefined && alignMid.offBy <= 30,
+      // 主人明确要求：说话框别压在她正头顶，要往旁边错开半个身位（位置稳定、不随机）
+      '在屏幕中间时，聊天框在她旁边（错开头顶，不压脸）',
+      alignMid.offBy !== undefined && alignMid.offBy >= 80 && alignMid.inside === true,
       JSON.stringify(alignMid),
     )
     check('聊天框在三种位置都完整落在屏幕里（不会被墙切掉）', headAlign.every((p) => p.inside === true), JSON.stringify(headAlign))

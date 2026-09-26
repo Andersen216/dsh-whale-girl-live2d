@@ -536,14 +536,15 @@
   /* 工具栏（底下三个按钮）比模型再小一号，主人说原来那三框太大 */
   --dshp-ds:0.86;
   font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
-  --dshp-fg:#1f2430;--dshp-bg:rgba(255,255,255,.95);--dshp-line:rgba(20,24,40,.12);
-  --dshp-accent:#7c5cff;--dshp-radius:14px;transition:opacity .25s ease}
+  --dshp-fg:#132043;--dshp-bg:rgba(246,249,255,.96);--dshp-line:rgba(30,60,130,.14);
+  /* 统一成鲸鱼蓝（和官网、App 图标同一套色） */
+  --dshp-accent:#3b62f6;--dshp-accent-soft:rgba(59,98,246,.14);--dshp-radius:14px;transition:opacity .25s ease}
 .dshp-root.dshp-hidden{opacity:0;pointer-events:none!important}
 /* 恢复用的把手挂在 body 上、不在 .dshp-root 里，所以这里必须是 body 级类：
    用后代选择器会永远匹配不到，隐藏之后就再也找不回来了。 */
 body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-tab:hover{transform:translateY(-1px)}
-@media (prefers-color-scheme:dark){.dshp-root{--dshp-fg:#eef1f8;--dshp-bg:rgba(28,30,40,.95);--dshp-line:rgba(255,255,255,.14)}}
+@media (prefers-color-scheme:dark){.dshp-root{--dshp-fg:#eaf0ff;--dshp-bg:rgba(18,26,48,.95);--dshp-line:rgba(140,175,255,.20);--dshp-accent:#7b9bff;--dshp-accent-soft:rgba(123,155,255,.18)}}
 .dshp-stage{position:absolute;left:0;bottom:0;pointer-events:none;
   filter:drop-shadow(0 10px 20px rgba(0,0,0,.24))}
 .dshp-stage canvas{display:block;pointer-events:none}
@@ -585,9 +586,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 /* 面板永远不许比可视区域还高 —— 桌面壳的窗口比整页小，菜单却挺高，
    超出部分原来直接被窗口裁掉（主人报的「设置一打开就被切、显示不全」）。
    现在：限高 + 内部滚动；面板本身就是可拖动的（见 makeDraggable）。 */
-.dshp-panel{max-height:calc(100vh - 20px);display:flex;flex-direction:column}
-.dshp-panes{overflow:auto;overscroll-behavior:contain;min-height:0}
-.dshp-hud{overflow:auto}
+/* 限高用「直接给滚动区」的办法，**不要**把面板变成 flex 容器 ——
+   上一版就是那样改的：flex + min-height:0 让菜单内容区塌成 0 高，
+   结果框弹出来了、里面却是空的，看着就像「框不出来」。 */
+.dshp-panes{max-height:calc(100vh - 190px);overflow:auto;overscroll-behavior:contain}
+.dshp-hud{max-height:calc(100vh - 40px);overflow:auto}
+.dshp-bubble{max-height:calc(100vh - 40px);overflow:auto}
 .dshp-free{transition:none!important}
 .dshp-btn{border:1px solid var(--dshp-line);background:var(--dshp-bg);color:var(--dshp-fg);
   border-radius:calc(11px * var(--dshp-ds));flex:0 0 auto;white-space:nowrap;
@@ -607,7 +611,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-close{position:absolute;top:5px;right:6px;width:22px;height:22px;line-height:1;
   border:none;border-radius:7px;background:transparent;color:inherit;opacity:.5;
   font-size:15px;cursor:pointer;padding:0}
-.dshp-close:hover{opacity:1;background:rgba(124,92,255,.14)}
+.dshp-close:hover{opacity:1;background:var(--dshp-accent-soft)}
 .dshp-panel{position:absolute;bottom:calc(100% + 10px * var(--dshp-ps));left:50%;
   transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(calc(4px + var(--dshp-shift-y,0px)));
   width:min(calc(320px * var(--dshp-ps)),86vw);pointer-events:auto;
@@ -632,7 +636,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-tabs{display:flex;gap:3px;margin-bottom:7px;border-bottom:1px solid var(--dshp-line);padding-bottom:6px}
 .dshp-tab-btn{border:none;background:transparent;color:inherit;opacity:.6;font:inherit;font-size:11.5px;
   padding:3px 9px;border-radius:7px;cursor:pointer}
-.dshp-tab-btn.dshp-active{opacity:1;background:rgba(124,92,255,.14);color:var(--dshp-accent);font-weight:600}
+.dshp-tab-btn.dshp-active{opacity:1;background:var(--dshp-accent-soft);color:var(--dshp-accent);font-weight:600}
 .dshp-grid{display:flex;flex-wrap:wrap;gap:5px;max-height:210px;overflow:auto;overscroll-behavior:contain}
 .dshp-chip{border:1px solid var(--dshp-line);background:transparent;color:inherit;font:inherit;
   font-size:calc(11.5px * var(--dshp-ps));border-radius:calc(8px * var(--dshp-ps));
@@ -1678,6 +1682,15 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const anchor = headScreenX() // 对准头顶，而不是整个场景的中心
     // 面板基准是「以桌宠中心居中」（left:50% + translateX(-50%)），所以位移 = 锚点 - 根节点中心
     let shift = anchor - (r.left + r.width / 2)
+    // 主人要求：说话框别压在她正头顶 —— 往「空间更大的一侧」让开半个身位。
+    // 纯计算、没有随机数，所以每次弹的位置都一样（之前那种「随机卡到某个地方」是
+    // 因为纵向没夹取 + 面板高度变了没重新摆，现在两者都修了）。
+    if (panel.classList.contains('dshp-composer')) {
+      const bodyHalf = Math.max(70, (r.width || 0) / 2)
+      const need = bodyHalf + w / 2 + 10
+      if (anchor < vw / 2) shift += need      // 她偏左 → 框往右让
+      else shift -= need                      // 她偏右 → 框往左让
+    }
     // 靠墙时往反方向挪，保证整个面板（含 × ）都在屏幕里
     const left = anchor + shift - w / 2
     if (left < pad) shift += pad - left
