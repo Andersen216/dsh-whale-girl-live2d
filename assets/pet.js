@@ -786,6 +786,16 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   }
   let mood = 'neutral'
 
+  /**
+   * applyRig() 每帧（20-30Hz，永远在跑）都要用到的临时容器，挪到外面按帧复用。
+   * 原来是 `new Map()`/`new Set()` 写在函数体里，哪怕待机没有任何表情变化
+   * 也要照样分配、当帧就丢——纯粹的 GC 压力。空闲时这三个容器基本是空的，
+   * `.clear()` 比重新分配便宜得多。
+   */
+  const rigTargets = new Map()
+  const rigDelta = new Map()
+  const rigClaimed = new Set()
+
   /** 情绪名 → 表达式名（不在 EXPR 里的会被过滤掉） */
   function moodFace(name) {
     if (name == null) return null
@@ -978,7 +988,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const dt = Math.min(64, now - (applyRig._last || now)) / 1000
     applyRig._last = now
 
-    const targets = new Map()
+    const targets = rigTargets
+    targets.clear()
     if (rig.face) targets.set(rig.face, 1)
     for (const name of rig.props) targets.set(name, 1)
 
@@ -1001,8 +1012,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // （比如墨镜会写 ParamEyeLOpen），叠上去就会打架。
     // 所以这里做一个裁决：每个参数在同一时刻只允许**一个**表达式写，
     // 优先级 脸 > 道具（按加入顺序）。
-    const delta = new Map()
-    const claimed = new Set()
+    const delta = rigDelta
+    const claimed = rigClaimed
+    delta.clear()
+    claimed.clear()
     let skipped = 0
     const add = (id, v) => delta.set(id, (delta.get(id) || 0) + v)
     const winners = []
@@ -1675,6 +1688,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       ui.root.style.setProperty('--dshp-ps', clamp(h / UI_BASE_HEIGHT, 0.85, 1.15).toFixed(3))
     }
     mask.dirty = true
+    markStageRectDirty()
     lastView = {
       w,
       h,
@@ -1760,9 +1774,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     el.style.top = top + 'px'
     el.style.right = 'auto'
     el.style.bottom = 'auto'
+    markStageRectDirty()
     setTimeout(() => {
       el.style.transition = ''
       clampPanels()
+      markStageRectDirty() // 滑动过程中缓存会暂时过期，动画落定后再刷新一次保证准
     }, 260)
   }
 
@@ -1814,6 +1830,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     root.style.top = Math.round(yy) + 'px'
     root.style.bottom = 'auto'
     root.dataset.edge = edge
+    markStageRectDirty()
   }
 
   /**
@@ -1838,6 +1855,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       root.style.right = 'auto'
       root.style.bottom = 'auto'
       root.dataset.edge = ''
+      markStageRectDirty()
       return
     }
     // 老存档 / 首次启动：按角落算一次，然后就地存成 edge 形式（下次就是新的了）
@@ -2064,6 +2082,25 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     gaze.detachUntil = performance.now() + (ms || 1500)
   }
 
+  /**
+   * `ui.stage` 的屏幕矩形缓存。gazeTick 永远在跑（40ms 一次，待机也不停），
+   * 之前每次都现读 `getBoundingClientRect()`——待机的时候她根本没动，
+   * 这个矩形几十秒都不带变的，没必要每 40ms 强制触发一次布局读取。
+   * 只在真的会动/会变的地方（拖动、贴边、resize、改大小）标脏，其余时候直接用缓存。
+   */
+  let stageRect = null
+  let stageRectDirty = true
+  function markStageRectDirty() {
+    stageRectDirty = true
+  }
+  function getStageRect() {
+    if (stageRectDirty || !stageRect) {
+      stageRect = ui.stage.getBoundingClientRect()
+      stageRectDirty = false
+    }
+    return stageRect
+  }
+
   function gazeTick() {
     if (!model || !ui) return
     const now = performance.now()
@@ -2077,7 +2114,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
     const g = gazeCfg()
     if (!detached && CFG.lookAtCursor && gaze.pointer.seen) {
-      const r = ui.stage.getBoundingClientRect()
+      const r = getStageRect()
       if (r.width) {
         const dx = gaze.pointer.x - (r.left + r.width / 2)
         const dy = gaze.pointer.y - (r.top + r.height / 2)
@@ -2191,6 +2228,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       py = clampY(py + sy, h, window.innerHeight)
       el.style.left = px + 'px'
       el.style.top = py + 'px'
+      markStageRectDirty()
       if (Math.abs(sx) > 0.4 || Math.abs(sy) > 0.4) requestAnimationFrame(step)
       else saveLayout({ x: Math.round(px), y: Math.round(py), edge: null, edgeY: null, corner: null })
     }
@@ -2460,7 +2498,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
             root.style.top = ny + 'px'
             root.style.right = 'auto'
             root.style.bottom = 'auto'
-
+            markStageRectDirty()
           }
         }
         // 只记录坐标，真正的跟随在 gazeTick 里限速执行——
@@ -2547,6 +2585,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         root.style.left = clamp(parseFloat(root.style.left) || 0, -40, window.innerWidth - 60) + 'px'
         root.style.top = clamp(parseFloat(root.style.top) || 0, -20, window.innerHeight - 60) + 'px'
       }
+      markStageRectDirty() // 视口本身变了，缓存的矩形肯定不准了——兜底再标一次
       clampPanels()
     })
 
@@ -3295,6 +3334,16 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (hidden) ui.bubble.hide()
     saveLayout({ hidden: !!hidden })
     if (shell.on) shell.post(hidden ? 'hidden' : 'shown')
+    // 隐藏是主人主动点的「现在不用显示她」——这种情况停渲染循环零风险
+    // （反正看不见，不存在「切回来感觉卡住」的问题，那个顾虑只针对「被遮挡但
+    // 没被隐藏」的场景，这里不碰）。桌面壳为了不让她显得卡顿，关掉了
+    // Electron 的后台降频（backgroundThrottling:false），所以 document.hidden
+    // 几乎不会在桌面壳里变 true——真正能捕捉「用户已经不需要她画面」的
+    // 时机，只有这个显式的隐藏开关。
+    if (app) {
+      if (hidden) app.ticker.stop()
+      else if (!document.hidden) app.ticker.start()
+    }
   }
 
   /**
