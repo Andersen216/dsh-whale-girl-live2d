@@ -153,8 +153,18 @@ function createMain() {
   win.on('closed', () => { win = null })
 
   // 拖动：页面里按下她 → 交给主进程搬窗口（拖动期间用 16ms 快速轮询，跟手）
-  ipcMain.on('drag-start', (_e, at) => {
-    if (!win || overPanel) return
+  ipcMain.on('drag-start', async (_e, at) => {
+    if (!win) return
+    // ⚠️ 不能直接用 overPanel（那是 90ms 轮询的上一次结果）：
+    // 按下那一刻它恰好是 panel 时，这次拖动就被让给网页，只能在窗口内挪、整个窗口搬不动。
+    // B 站 @F0rsEn 反馈的正是这条。改成「按下瞬间重新判一次」，几十毫秒的等待对拖动没影响。
+    try {
+      const b = win.getBounds()
+      const kind = await win.webContents.executeJavaScript(
+        hitJS(Math.round(at.x - b.x), Math.round(at.y - b.y)),
+      )
+      if (kind === 'panel') return // 真控件（滑块/按钮/输入框）→ 让给网页
+    } catch (e) {}
     dragFrom = { mouse: at, win: win.getPosition() }
     clearInterval(dragTimer)
     dragTimer = setInterval(() => {

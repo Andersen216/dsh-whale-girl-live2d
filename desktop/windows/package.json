@@ -1,35 +1,48 @@
 {
-  "name": "@deepseek-ai/dsh-desktop-host",
-  "description": "Private Node-mode host process for the Electron desktop application",
-  "version": "0.2.0-rc.2",
-  "private": true,
+  "name": "dsh-whale-girl-pet-windows",
+  "productName": "DS 鲸鱼娘桌宠",
+  "version": "0.1.0",
+  "description": "Windows 桌面外壳：把 DSH 里的鲸鱼娘桌宠放到桌面上（透明、置顶、点击穿透、贴边悬浮球）。她本身还是那份 DSH 插件，这里只是个窗口。",
+  "main": "main.js",
+  "author": "Andersen216",
   "license": "MIT",
-  "type": "module",
-  "main": "lib/index.js",
-  "files": [
-    "lib/index.js",
-    "lib/cli.js"
-  ],
-  "dependencies": {
-    "koffi": "^3.1.0",
-    "@deepseek-ai/libreoffice-kit": "^0.1.1",
-    "@deepseek-ai/dsh": "0.2.0-rc.2",
-    "@deepseek-ai/cordis": "~4.0.4",
-    "@deepseek-ai/dsh-agent": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-client-connection": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-app-boot": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-host-webserver": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-home-paths": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-jobs": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-schedule": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-tool-workspace-dependencies": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-deepseek-account": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-workspace": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-skill-office": "0.2.0-rc.2"
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64 --publish never"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis-plugin-loader": "~1.0.5",
-    "@deepseek-ai/cordis-plugin-include": "~1.0.9",
-    "@deepseek-ai/dsh-skill": "0.2.0-rc.2"
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.andersen216.dsh.whalegirlpet",
+    "productName": "DS 鲸鱼娘桌宠",
+    "files": [
+      "main.js",
+      "preload.js",
+      "build/**"
+    ],
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DS 鲸鱼娘桌宠"
+    },
+    "artifactName": "DS-WhaleGirl-Pet-Windows-Setup.${ext}"
   }
 }
