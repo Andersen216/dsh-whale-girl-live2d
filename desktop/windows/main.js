@@ -27,6 +27,17 @@ const CANDIDATE_BASES = [
   'http://127.0.0.1:3000',
 ]
 let petBase = CANDIDATE_BASES[0]
+
+/** 通行证文件里记录的宿主端口（插件写的，因机器而异 —— 不能写死） */
+function deskPort() {
+  try {
+    const j = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8'))
+    const n = Number(j.port)
+    return Number.isInteger(n) && n > 0 && n < 65536 ? n : null
+  } catch (e) {
+    return null
+  }
+}
 const petURL = () => petBase + '/dsh-pet/standalone'
 const PLUGIN = 'github:Andersen216/dsh-whale-girl-live2d'
 // 同 macOS：窗口要装得下她 + 四周的面板（透明区域点击穿透，不挡别的窗口）
@@ -227,7 +238,10 @@ function createMain() {
  */
 async function discoverHost(token) {
   let fallback = null
-  for (const base of CANDIDATE_BASES) {
+  // 最可信的是插件写下的真实端口（谁先开就写谁 → 打开网页版还是桌面版都能连上）
+  const p = deskPort()
+  const bases = p ? ['http://127.0.0.1:' + p, ...CANDIDATE_BASES] : CANDIDATE_BASES
+  for (const base of bases) {
     try {
       const ctl = new AbortController()
       const timer = setTimeout(() => ctl.abort(), 1500)

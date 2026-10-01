@@ -434,8 +434,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     // MARK: - 加载与位置
 
     /// 候选宿主：① 正在监听的「像 DSH 的」进程（官方桌面版 / dsh web）② 常见端口兜底
+    /// 通行证文件里记录的宿主端口（插件写进去的，因机器而异 —— 不能写死）
+    func deskPort() -> Int? {
+        let p = NSHomeDirectory() + "/.dsh/dsh-live2d-pet-desktop.json"
+        guard let d = FileManager.default.contents(atPath: p),
+              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+              let n = o["port"] as? Int, n > 0, n < 65536
+        else { return nil }
+        return n
+    }
+
     func candidateBases() -> [String] {
         var ports: [Int] = []
+        // ① 最可信：插件写下的真实端口（谁先开就写谁，所以「打开哪个都能连」）
+        if let n = deskPort() { ports.append(n) }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
         p.arguments = ["-nP", "-iTCP", "-sTCP:LISTEN"]
