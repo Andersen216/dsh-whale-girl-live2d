@@ -238,9 +238,17 @@ function createMain() {
  */
 async function discoverHost(token) {
   let fallback = null
-  // 最可信的是插件写下的真实端口（谁先开就写谁 → 打开网页版还是桌面版都能连上）
+  // 优先顺序：① 插件写下的真实端口 ② 本机实际在监听的端口（扫出来的） ③ 常见端口兜底
+  const scanned = await scanListeningPorts()
+  const ordered = []
   const p = deskPort()
-  const bases = p ? ['http://127.0.0.1:' + p, ...CANDIDATE_BASES] : CANDIDATE_BASES
+  if (p) ordered.push(p)
+  for (const n of scanned) if (!ordered.includes(n)) ordered.push(n)
+  for (const base of CANDIDATE_BASES) {
+    const n = Number(base.split(':').pop())
+    if (!ordered.includes(n)) ordered.push(n)
+  }
+  const bases = ordered.map((n) => 'http://127.0.0.1:' + n)
   for (const base of bases) {
     try {
       const ctl = new AbortController()
@@ -275,6 +283,32 @@ async function load() {
   if (base !== petBase) console.log('[dsh-pet] 找到宿主:', base)
   petBase = base
   win.loadURL(petURL())
+}
+
+/** 用 netstat 列出本机正在监听的端口（不靠固定端口去猜 —— 别人的端口可能完全不同） */
+function scanListeningPorts() {
+  return new Promise((resolve) => {
+    try {
+      exec('netstat -ano -p tcp', { timeout: 5000, windowsHide: true }, (err, stdout) => {
+        if (err || !stdout) return resolve([])
+        const ports = []
+        for (const line of String(stdout).split('\n')) {
+          if (!/LISTENING/i.test(line)) continue
+          const m = line.match(/(?:127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::\]):(\d{2,5})/)
+          if (m) {
+            const n = Number(m[1])
+            if (n > 1023 && n < 65536) ports.push(n)
+          }
+        }
+        // 去重 + 常见开发端口排前面（纯优化顺序，不影响正确性）
+        const uniq = [...new Set(ports)]
+        uniq.sort((a, b) => (a === 19387 || a === 3080 ? -1 : 0) - (b === 19387 || b === 3080 ? -1 : 0))
+        resolve(uniq.slice(0, 60))
+      })
+    } catch (e) {
+      resolve([])
+    }
+  })
 }
 
 function readPos() {

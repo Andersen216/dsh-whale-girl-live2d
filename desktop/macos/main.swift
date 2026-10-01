@@ -457,13 +457,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         if (try? p.run()) != nil {
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             p.waitUntilExit()
+            // 扫**所有**本机监听端口，不靠进程名/固定端口去猜 ——
+            // 别人的 DSH 可能是别的端口、进程名也不一定是 DeepSeek/node。
+            // 端口不监听时连接会被立刻拒绝，所以逐个探活很快（见 probeHost 的 1.5s 上限）。
             for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
                 let l = String(line)
-                let cmd = l.split(separator: " ").first.map(String.init) ?? ""
-                // 官方桌面版进程名是 "DeepSeek"，`dsh web` 是 node
-                guard cmd.contains("DeepSeek") || cmd.contains("dsh") || cmd.contains("node") else { continue }
-                if let r = l.range(of: #":(\d{4,5})\s*$"#, options: .regularExpression),
-                   let port = Int(l[r].dropFirst().trimmingCharacters(in: .whitespaces)) {
+                guard l.contains("127.0.0.1:") || l.contains("*:") || l.contains("[::1]:") else { continue }
+                if let r = l.range(of: #":(\d{2,5})\s*$"#, options: .regularExpression),
+                   let port = Int(l[r].dropFirst().trimmingCharacters(in: .whitespaces)), port > 1023, port < 65536 {
                     ports.append(port)
                 }
             }
