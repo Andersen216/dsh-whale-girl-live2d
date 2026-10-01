@@ -18,8 +18,16 @@ const os = require('node:os')
 const path = require('node:path')
 const { exec } = require('node:child_process')
 
-const PET_URL = 'http://127.0.0.1:3080/dsh-pet/standalone'
-const ORIGIN = 'http://127.0.0.1:3080'
+// 宿主地址在启动时「发现」出来，不再写死 —— 与 macOS 版保持一致：
+// 官方桌面版（Electron，端口由宿主决定，实测 19387）和手动起的 `dsh web`（3080）都要能连上。
+const CANDIDATE_BASES = [
+  'http://127.0.0.1:19387',
+  'http://127.0.0.1:3080',
+  'http://127.0.0.1:8080',
+  'http://127.0.0.1:3000',
+]
+let petBase = CANDIDATE_BASES[0]
+const petURL = () => petBase + '/dsh-pet/standalone'
 const PLUGIN = 'github:Andersen216/dsh-whale-girl-live2d'
 // 同 macOS：窗口要装得下她 + 四周的面板（透明区域点击穿透，不挡别的窗口）
 const WIN_W = 560
@@ -212,12 +220,47 @@ function createMain() {
   })
 }
 
-function load() {
+/**
+ * 发现正在运行的 DSH 宿主：官方桌面版（19387）或 `dsh web`（3080）。
+ * 带通行证探 /dsh-pet/pet.js：200 = 就是它；401 = 插件在但票不对（也先进去）。
+ * 以前写死 3080，导致只开官方桌面版的用户连不上。
+ */
+async function discoverHost(token) {
+  let fallback = null
+  for (const base of CANDIDATE_BASES) {
+    try {
+      const ctl = new AbortController()
+      const timer = setTimeout(() => ctl.abort(), 1500)
+      const res = await fetch(base + '/dsh-pet/pet.js', {
+        headers: { Cookie: 'dsh_pet_desk=' + token },
+        signal: ctl.signal,
+      })
+      clearTimeout(timer)
+      if (res.status === 200) return base
+      if (res.status === 401 && !fallback) fallback = base
+    } catch (e) {
+      /* 这个宿主没在跑，试下一个 */
+    }
+  }
+  return fallback
+}
+
+async function load() {
   if (!win || win.isDestroyed()) return
-  setTokenCookie().then((ok) => {
-    if (!ok) return showHint()
-    win.loadURL(PET_URL)
-  })
+  const ok = await setTokenCookie()
+  if (!ok) return showHint()
+  const token = readToken()
+  const base = token ? await discoverHost(token) : null
+  if (!base) {
+    // 两个宿主都没找到：给提示页，5 秒后自动重试（用户开起任一个宿主就会连上）
+    failCount++
+    if (failCount >= 1) showHint()
+    setTimeout(load, 5000)
+    return
+  }
+  if (base !== petBase) console.log('[dsh-pet] 找到宿主:', base)
+  petBase = base
+  win.loadURL(petURL())
 }
 
 function readPos() {
@@ -253,7 +296,7 @@ function showHint(installed) {
   code{background:rgba(127,150,255,.18);padding:2px 6px;border-radius:6px}
   </style><body><div class="box">
   <div class="t">🐋 正在找 DSH…</div>
-  <div class="s">${token ? '通行证已就位，但连不上 <code>127.0.0.1:3080</code>。<br>请确认 ① 装了插件 ② DSH 正在运行。' : '还没读到通行证 <code>~/.dsh/dsh-live2d-pet-desktop.json</code>。<br>请先在 DSH 里装插件，然后重启 DSH。'}</div>
+  <div class="s">${token ? '通行证已就位，但连不上 <code>${petBase}</code>。<br>请确认 ① 装了插件 ② DSH 正在运行。' : '还没读到通行证 <code>~/.dsh/dsh-live2d-pet-desktop.json</code>。<br>请先在 DSH 里装插件，然后重启 DSH。'}</div>
   <button onclick="window.dshpet.install()">一键安装插件</button>
   <button onclick="window.dshpet.reload()">重新连接</button>
   </div>
