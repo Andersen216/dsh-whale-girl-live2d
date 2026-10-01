@@ -64,7 +64,7 @@ async function setTokenCookie() {
   if (!token) return false
   try {
     await session.defaultSession.cookies.set({
-      url: ORIGIN,
+      url: petBase,
       name: 'dsh_pet_desk',
       value: token,
       domain: '127.0.0.1',
@@ -204,7 +204,7 @@ function createMain() {
         if (collapsed) expand()
         break
       case 'open-dsh':
-        shell.openExternal(ORIGIN + '/')
+        shell.openExternal(petBase + '/')
         break
       case 'quit':
         app.quit()
@@ -467,7 +467,7 @@ function createTray() {
           },
         },
         { label: '一键安装插件（如果还没装）', click: installPlugin },
-        { label: '打开 DSH 界面', click: () => shell.openExternal(ORIGIN + '/') },
+        { label: '打开 DSH 界面', click: () => shell.openExternal(petBase + '/') },
         { type: 'separator' },
         { label: '彻底退出', click: () => app.quit() },
       ]),
