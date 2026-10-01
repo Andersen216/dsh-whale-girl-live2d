@@ -1,5 +1,20 @@
 <div align="center">
 
+## 兼容性（重要）
+
+| 宿主 | 状态 |
+| --- | --- |
+| DSH **0.2.0-rc.1 / 0.2.0-rc.2**（官方桌面版当前版本） | ✅ **对齐的目标版本**，开发与验证都在这个版本上 |
+| DSH 0.2.x（后续版本） | 🔄 会持续跟进 |
+| DSH **0.1.x**（例如桌面版 0.1.7-rc.2） | ❌ **不支持** —— 会报 `failed to import` / `did not activate` |
+
+为什么老版本不行：宿主插件 API 在 0.1.x → 0.2.x 之间有过变动
+（举例：`connection.requestRejection` 在 0.1.0-rc.3 上不存在、0.1.5-rc.2 上才有）。
+本插件本身**只依赖 Node 内置模块**、没有任何第三方依赖，所以加载失败不是缺依赖，
+而是与老宿主的 API 不匹配。
+
+**遇到 `failed to import` 怎么办**：把官方桌面版 / DSH 升级到 **0.2.0-rc.x 或更新**，重装插件即可。
+
 # 🐋 鲸鱼娘桌宠 · Whale Girl Live2D
 
 **DSH（DeepSeek Harness）Web 界面里的 Live2D 桌宠 —— 她真的在跟着 agent 干活。**

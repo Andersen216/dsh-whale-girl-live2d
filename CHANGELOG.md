@@ -1,5 +1,16 @@
 # 更新日志 / Changelog
 
+## 0.4.5 — 2026-10-01
+
+### 明确兼容范围：对齐最新宿主（0.2.0-rc.x）
+
+- README 增加「兼容性」表：**目标版本 DSH 0.2.0-rc.1 / 0.2.0-rc.2**（官方桌面版当前版本）；
+  **0.1.x 不支持**（会报 `failed to import` / `did not activate`）
+- 依据：宿主插件 API 在 0.1.x → 0.2.x 之间发生过变动（`connection.requestRejection`
+  在 0.1.0-rc.3 上不存在、0.1.5-rc.2 上才有）；本插件只依赖 Node 内置模块、无第三方依赖，
+  因此加载失败属于宿主 API 不匹配，而非缺依赖
+- 对应 GitHub Issue #1（桌面版 0.1.7-rc.2 安装报错）：建议升级宿主后重装
+
 ## 0.4.4 — 2026-09-30
 
 > **English summary**: mouse-move stutter on macOS is fixed. Two causes, both in the shell:
