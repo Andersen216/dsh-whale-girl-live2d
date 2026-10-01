@@ -50,6 +50,12 @@ const promptSignals = []
 const cancels = []
 
 const mockCtx = {
+  // 真宿主的 ctx 混入了 registry 方法（ctx.plugin / ctx.inject）——
+  // 之前的假 ctx 少了 inject，导致 apply(root)+root.inject([...]) 这种写法在这里必然 TypeError，
+  // 我们据此错误地判断「上游 PR 会让插件挂不上」。上游 @3Asterism 指出了这个 mock 缺口。
+  inject(names, cb) {
+    return typeof cb === 'function' ? cb(mockCtx) : mockCtx
+  },
   webServer: {
     register(route) {
       if (route.kind === 'exact') {
