@@ -563,6 +563,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-bubble:after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-6px;
   width:12px;height:12px;background:var(--dshp-bg);border-right:1px solid var(--dshp-line);
   border-bottom:1px solid var(--dshp-line);transform:rotate(45deg);border-radius:0 0 3px 0}
+/* 翻到下面：贴顶角落时头顶没地方放气泡，整个翻到脚下去，别硬挤出屏幕。
+   见 placePanel() 里的翻转判断；尖角跟着一起翻，还是指向她。 */
+.dshp-bubble.dshp-flip{bottom:auto;top:100%;margin-bottom:0;margin-top:calc(10px * var(--dshp-s));
+  transform:translate(calc(-50% + var(--dshp-shift,0px)),calc(-6px + var(--dshp-shift-y,0px))) scale(.96)}
+.dshp-bubble.dshp-flip.dshp-on{transform:translate(calc(-50% + var(--dshp-shift,0px)),var(--dshp-shift-y,0px)) scale(1)}
+.dshp-bubble.dshp-flip:after{bottom:auto;top:-6px;border-right:none;border-bottom:none;
+  border-left:1px solid var(--dshp-line);border-top:1px solid var(--dshp-line);border-radius:3px 0 0 0}
 .dshp-head{display:flex;align-items:center;gap:calc(6px * var(--dshp-s));
   margin-bottom:calc(3px * var(--dshp-s));
   font-size:calc(10.5px * var(--dshp-s));letter-spacing:.04em;color:var(--dshp-accent);font-weight:600}
@@ -583,6 +590,23 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   width:max-content;white-space:nowrap;
   pointer-events:auto;opacity:0;transition:opacity .22s ease}
 .dshp-root.dshp-hover .dshp-dock,.dshp-root.dshp-open .dshp-dock{opacity:1}
+/* 贴进真正的角落时，正下方没有余量留给工具条了（不然角落就白贴了），
+   所以挪到侧边，竖排、贴着她身子。哪一侧空出来给按钮，看贴的是哪个角：
+   贴左边的角（没有左边空间）就把按钮甩到右边，贴右边的角反过来。
+   竖直方向**不**用「以整个包围盒居中」——包围盒比看得见的她大一圈，
+   居中会让工具条的中心比她实际的中心更靠上，贴顶角落时很容易被顶到
+   窗口标题栏那条线以上去。改成贴对应的那条边（跟角落同侧）：贴顶的角
+   工具条也贴顶，贴底的角工具条也贴底，跟着她一起「贴死」，不会比她更冒。 */
+.dshp-root[data-corner] .dshp-dock{left:auto;right:auto;
+  flex-direction:column;width:auto;white-space:normal;transform:none}
+.dshp-root[data-corner="tl"] .dshp-dock,.dshp-root[data-corner="tr"] .dshp-dock{
+  top:calc(10px * var(--dshp-ds));bottom:auto}
+.dshp-root[data-corner="bl"] .dshp-dock,.dshp-root[data-corner="br"] .dshp-dock{
+  bottom:calc(10px * var(--dshp-ds));top:auto}
+.dshp-root[data-corner="tl"] .dshp-dock,.dshp-root[data-corner="bl"] .dshp-dock{
+  left:calc(100% + 6px * var(--dshp-ds))}
+.dshp-root[data-corner="tr"] .dshp-dock,.dshp-root[data-corner="br"] .dshp-dock{
+  right:calc(100% + 6px * var(--dshp-ds))}
 .dshp-btn{border:1px solid var(--dshp-line);background:var(--dshp-bg);color:var(--dshp-fg);
   border-radius:calc(11px * var(--dshp-ds));flex:0 0 auto;white-space:nowrap;
   padding:calc(5px * var(--dshp-ds)) calc(11px * var(--dshp-ds));
@@ -615,6 +639,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-root.dshp-sizing .dshp-panel{transition:opacity .16s ease}
 .dshp-panel.dshp-on{opacity:1;visibility:visible;
   transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(var(--dshp-shift-y,0px))}
+/* 翻到下面：跟气泡同一个道理，贴顶角落时头顶没地方展开设置面板 */
+.dshp-panel.dshp-flip{bottom:auto;top:calc(100% + 10px * var(--dshp-ps));
+  transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(calc(-4px + var(--dshp-shift-y,0px)))}
+.dshp-panel.dshp-flip.dshp-on{transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(var(--dshp-shift-y,0px))}
 .dshp-panel textarea{width:100%;box-sizing:border-box;resize:none;
   height:calc(64px * var(--dshp-ps));font:inherit;
   color:inherit;background:transparent;border:1px solid var(--dshp-line);
@@ -643,7 +671,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    主人要求：右键不再是设置菜单，而是这个框；信息要醒目、要盖在最上层、
    又要能自己收起来（不然挡住对话）。所以它是独立一层，z-index 比菜单还高。 */
 .dshp-hud{position:absolute;left:50%;bottom:calc(100% + 10px * var(--dshp-ps));
-  transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(8px);
+  transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(calc(8px + var(--dshp-shift-y,0px)));
   width:min(calc(292px * var(--dshp-ps)),86vw);pointer-events:auto;z-index:9;
   background:var(--dshp-bg);color:var(--dshp-fg);
   border:1px solid var(--dshp-line);border-radius:calc(var(--dshp-radius) * var(--dshp-ps));
@@ -653,7 +681,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   transition:opacity .18s ease,transform .18s cubic-bezier(.2,.9,.3,1);
   font-size:calc(12px * var(--dshp-ps))}
 .dshp-hud.dshp-on{opacity:1;visibility:visible;
-  transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(0)}
+  transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(var(--dshp-shift-y,0px))}
+/* 翻到下面：跟设置面板/气泡同一个道理，钱包卡片贴顶角落时头顶也没地方展开 */
+.dshp-hud.dshp-flip{bottom:auto;top:calc(100% + 10px * var(--dshp-ps));
+  transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(calc(-8px + var(--dshp-shift-y,0px)))}
+.dshp-hud.dshp-flip.dshp-on{transform:translateX(calc(-50% + var(--dshp-shift,0px))) translateY(var(--dshp-shift-y,0px))}
 /* 刚弹出来那一下给一圈呼吸光，提醒「看这里」——冒烟效果用 box-shadow，不动 transform */
 .dshp-hud.dshp-flash{animation:dshp-hud-flash 1.15s ease-out 2}
 @keyframes dshp-hud-flash{
@@ -785,6 +817,16 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     burst: null,
   }
   let mood = 'neutral'
+
+  /**
+   * applyRig() 每帧（20-30Hz，永远在跑）都要用到的临时容器，挪到外面按帧复用。
+   * 原来是 `new Map()`/`new Set()` 写在函数体里，哪怕待机没有任何表情变化
+   * 也要照样分配、当帧就丢——纯粹的 GC 压力。空闲时这三个容器基本是空的，
+   * `.clear()` 比重新分配便宜得多。
+   */
+  const rigTargets = new Map()
+  const rigDelta = new Map()
+  const rigClaimed = new Set()
 
   /** 情绪名 → 表达式名（不在 EXPR 里的会被过滤掉） */
   function moodFace(name) {
@@ -978,7 +1020,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const dt = Math.min(64, now - (applyRig._last || now)) / 1000
     applyRig._last = now
 
-    const targets = new Map()
+    const targets = rigTargets
+    targets.clear()
     if (rig.face) targets.set(rig.face, 1)
     for (const name of rig.props) targets.set(name, 1)
 
@@ -1001,8 +1044,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // （比如墨镜会写 ParamEyeLOpen），叠上去就会打架。
     // 所以这里做一个裁决：每个参数在同一时刻只允许**一个**表达式写，
     // 优先级 脸 > 道具（按加入顺序）。
-    const delta = new Map()
-    const claimed = new Set()
+    const delta = rigDelta
+    const claimed = rigClaimed
+    delta.clear()
+    claimed.clear()
     let skipped = 0
     const add = (id, v) => delta.set(id, (delta.get(id) || 0) + v)
     const winners = []
@@ -1584,13 +1629,29 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return r.left + r.width / 2
   }
 
+  /**
+   * 气泡/面板/HUD 全都必须整个待在 DSH app 自己的窗口里——不管是网页版的
+   * 浏览器视口，还是桌面壳那个固定尺寸的透明覆盖窗口，`window.innerWidth/
+   * innerHeight` 在两种情况下都正好等于「这个 app 能画画的地方」，所以只要
+   * 面板的四条边都夹在 `[pad, vw/vh - pad]` 里，就一定没有超出 app 本身。
+   *
+   * 光「横向夹+纵向推」不够：面板默认长在她头顶上方，桌面壳窗口特地留高
+   * 就是为了给这个上方留白。可她现在能贴死在顶部角落了（EDGE_GAP 几乎到顶），
+   * 头顶就没有留白可言——硬推的话面板会被压扁/顶穿窗口顶边。真正靠谱的做法
+   * 是「翻转」：上面放不下、下面比上面宽裕，就整个翻到脚下去（CSS 见
+   * `.dshp-flip`），而不是在放不下的地方硬挤。
+   */
   function placePanel(panel) {
     if (!panel) return
     const vw = window.innerWidth
+    const vh = window.innerHeight
     const pad = 10
     panel.style.setProperty('--dshp-shift', '0px')
+    panel.style.setProperty('--dshp-shift-y', '0px')
+    panel.classList.remove('dshp-flip')
     if (!panel.classList.contains('dshp-on')) return
     const w = panel.getBoundingClientRect().width || 0
+    const h = panel.getBoundingClientRect().height || 0
     if (!w) return
     const r = ui.root.getBoundingClientRect()
     const anchor = headScreenX() // 对准头顶，而不是整个场景的中心
@@ -1601,9 +1662,19 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (left < pad) shift += pad - left
     else if (left + w > vw - pad) shift -= left + w - (vw - pad)
     panel.style.setProperty('--dshp-shift', Math.round(shift) + 'px')
-    // 纵向兜底：桌宠被拖到屏幕顶端时，面板别伸到屏幕外面去
-    const top = panel.getBoundingClientRect().top
-    panel.style.setProperty('--dshp-shift-y', top < pad ? Math.round(pad - top) + 'px' : '0px')
+
+    // 纵向：默认贴头顶上方；上面的空间不够放、下面比上面宽裕，就整个翻下去
+    const spaceAbove = r.top
+    const spaceBelow = vh - r.bottom
+    const flip = spaceAbove < h + pad && spaceBelow > spaceAbove
+    panel.classList.toggle('dshp-flip', flip)
+    if (flip) {
+      const bottom = panel.getBoundingClientRect().bottom
+      panel.style.setProperty('--dshp-shift-y', bottom > vh - pad ? Math.round(vh - pad - bottom) + 'px' : '0px')
+    } else {
+      const top = panel.getBoundingClientRect().top
+      panel.style.setProperty('--dshp-shift-y', top < pad ? Math.round(pad - top) + 'px' : '0px')
+    }
   }
 
   function clampPanels() {
@@ -1675,6 +1746,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       ui.root.style.setProperty('--dshp-ps', clamp(h / UI_BASE_HEIGHT, 0.85, 1.15).toFixed(3))
     }
     mask.dirty = true
+    markStageRectDirty()
     lastView = {
       w,
       h,
@@ -1743,8 +1815,46 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   /** 贴边的留白（视觉上「贴住」但不顶死） */
   const EDGE_GAP = 10
+  /**
+   * 贴顶单独留更大的安全距离——DSH 桌面壳/主窗口顶边常有一排自己的控件
+   * （缩小/放大/关闭一类），那层东西的 z-index 不一定在这个插件的 DOM 里，
+   * 插件这边调不动谁盖谁。干脆贴顶的时候留够，从根上让画面不伸进那一条，
+   * 不用去赌层级谁压得过谁。这个数字没法测出精确值（不知道对方控件条多高），
+   * 按常见的自绘标题栏高度估的，明显不够或者太空可以再调。
+   */
+  const EDGE_GAP_TOP = 32
   /** 松手时离边多近就吸附 */
   const SNAP_DIST = 52
+
+  /**
+   * `ui.root` 的包围盒比看得见的她大一圈——fitModel 特意留了 PAD（见那边注释：
+   * 尾巴、举起来的道具、惊讶表情容易被裁），所以四边都带着一圈透明留白。
+   * 贴边/贴角贴的应该是「看得见的她」，不是这圈留白，不然算出来的「贴死」
+   * 位置其实还差一截（看着像怎么都拖不进角落），贴顶边的时候又会反过来把
+   * 留白也顶到墙外，看着像穿模。
+   *
+   * 用命中掩码（mask.bbox，跟点击穿透用的是同一份数据）把留白换算成当前
+   * 屏幕像素，贴边计算时统一扣掉。掩码还没测出来就退回 0（等价于老行为，
+   * 不会比原来更差）。
+   *
+   * 强制重测一次（忽略节流）：mask.bbox 平时只在 resize/换姿势时才刷新，
+   * 待机动作（自拍、伸展…）会临时改变轮廓但不会标脏——松手贴边这一刻如果
+   * 用的是几秒前、她做着别的动作时测出来的旧掩码，留白算出来就会偏，
+   * 贴边表现看着就跟撞了大运一样时准时不准。这里直接现测一次当前这一帧，
+   * 保证用的是「她此刻真实的样子」。
+   */
+  function visualMargins() {
+    buildMask(true)
+    const b = mask.bbox
+    if (!b) return { left: 0, right: 0, top: 0, bottom: 0 }
+    const r = ui.root.getBoundingClientRect()
+    return {
+      left: b.x0 * r.width,
+      right: (1 - b.x1) * r.width,
+      top: b.y0 * r.height,
+      bottom: (1 - b.y1) * r.height,
+    }
+  }
 
   /** 工具条在容器下面探出来的高度（贴底时要把这段算进去，否则按钮会被屏幕切掉） */
   function dockClearance() {
@@ -1760,9 +1870,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     el.style.top = top + 'px'
     el.style.right = 'auto'
     el.style.bottom = 'auto'
+    markStageRectDirty()
     setTimeout(() => {
       el.style.transition = ''
       clampPanels()
+      markStageRectDirty() // 滑动过程中缓存会暂时过期，动画落定后再刷新一次保证准
     }, 260)
   }
 
@@ -1775,26 +1887,47 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    * 松手时的贴边吸附。
    *
    * 主人改的规矩（原话）：「只吸附右边、不吸附底，我可以随意调整高低，
-   * 但只吸附右边或左边的墙壁」——所以这里**只看左右**：
-   *   · 靠左墙 / 靠右墙 → 吸过去，竖直位置保持你松手的那个高度
-   *   · 离两边都远 → 就停在原地（竖直方向永远不吸）
-   * 竖直方向只做一件事：别让底下的三个按钮被屏幕切掉（软性夹一下，不是吸附）。
+   * 但只吸附右边或左边的墙壁」——所以竖直方向本身不设单独的吸附线。
+   * 后来又加了一条：**四个真角落**要能整个贴死（横纵一起锁住）——这样
+   * 工具条才有理由挪到侧边（见 CSS `[data-corner]`），角落才不会因为
+   * 「下面还要留给按钮的空间」而贴不到底。
+   *
+   *   · 横纵都够近墙角 → 真角落：两个方向一起吸，工具条挪侧边
+   *   · 只有左右够近 → 老规矩：吸那一侧墙，竖直位置保持你松手的高度
+   *   · 都不够近 → 停在原地，交给惯性滑动
    */
   function snapOnRelease() {
     const vw = window.innerWidth
     const vh = window.innerHeight
     const r = ui.root.getBoundingClientRect()
-    const nearL = r.left < SNAP_DIST
-    const nearR = vw - r.right < SNAP_DIST
-    if (!nearL && !nearR) return false // 底部不再吸附
+    const m = visualMargins()
+    // 判「够不够近」和算「贴死的位置」都要用看得见的边，不是包围盒的边
+    const nearL = r.left + m.left < SNAP_DIST
+    const nearR = vw - (r.right - m.right) < SNAP_DIST
+    const nearT = r.top + m.top < SNAP_DIST
+    const nearB = vh - (r.bottom - m.bottom) < SNAP_DIST
+
+    if ((nearL || nearR) && (nearT || nearB)) {
+      const corner = (nearT ? 't' : 'b') + (nearL ? 'l' : 'r')
+      const left = nearL ? EDGE_GAP - m.left : vw - r.width - EDGE_GAP + m.right
+      const top = nearT ? EDGE_GAP_TOP - m.top : vh - r.height - EDGE_GAP + m.bottom
+      glideTo(left, top)
+      // 记成「贴哪个角」，窗口大小变了也还贴着那个角（见 resize 里的 applyPosition）
+      saveLayout({ x: null, y: null, edge: null, edgeY: null, corner })
+      ui.root.dataset.corner = corner
+      ui.root.dataset.edge = corner[1] === 'l' ? 'left' : 'right'
+      return true
+    }
+    if (!nearL && !nearR) return false // 底部/顶部单独都不吸附
 
     const edge = nearR ? 'right' : 'left'
     const y = clampY(r.top, r.height, vh)
-    const left = edge === 'left' ? EDGE_GAP : vw - r.width - EDGE_GAP
+    const left = edge === 'left' ? EDGE_GAP - m.left : vw - r.width - EDGE_GAP + m.right
     glideTo(left, y)
     // 记成「贴哪一边 + 竖直位置」，窗口大小变了也还贴着那一边、高低不动
     saveLayout({ x: null, y: null, corner: null, edge, edgeY: Math.round(y) })
     ui.root.dataset.edge = edge
+    delete ui.root.dataset.corner
     return true
   }
 
@@ -1808,22 +1941,47 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   /** 贴住某一侧墙：left/right + top 固定，竖直位置由主人自己定 */
   function applyEdge(edge, y) {
     const root = ui.root
+    const m = visualMargins()
     const yy = clampY(Number(y) || 0, root.getBoundingClientRect().height || 0, window.innerHeight)
-    root.style.left = edge === 'left' ? EDGE_GAP + 'px' : 'auto'
-    root.style.right = edge === 'right' ? EDGE_GAP + 'px' : 'auto'
+    root.style.left = edge === 'left' ? (EDGE_GAP - m.left) + 'px' : 'auto'
+    root.style.right = edge === 'right' ? (EDGE_GAP - m.right) + 'px' : 'auto'
     root.style.top = Math.round(yy) + 'px'
     root.style.bottom = 'auto'
     root.dataset.edge = edge
+    delete root.dataset.corner
+    markStageRectDirty()
   }
 
   /**
-   * 摆放位置。三种存档：
-   *   · edge + edgeY —— 贴左/右墙，竖直位置自由（**现在吸附后存的就是这种**）
+   * 贴进真正的角落：横纵两个方向都锁死在墙边（不像 applyEdge 只锁一个方向），
+   * 所以**不走 clampY**——角落模式下方不用给工具条留白，它已经挪到侧边了
+   * （CSS `[data-corner]` 里处理），能贴多死就贴多死。
+   */
+  function applyCorner(corner) {
+    const root = ui.root
+    const m = visualMargins()
+    root.style.left = corner === 'tl' || corner === 'bl' ? (EDGE_GAP - m.left) + 'px' : 'auto'
+    root.style.right = corner === 'tr' || corner === 'br' ? (EDGE_GAP - m.right) + 'px' : 'auto'
+    root.style.top = corner === 'tl' || corner === 'tr' ? (EDGE_GAP_TOP - m.top) + 'px' : 'auto'
+    root.style.bottom = corner === 'bl' || corner === 'br' ? (EDGE_GAP - m.bottom) + 'px' : 'auto'
+    root.dataset.corner = corner
+    root.dataset.edge = corner === 'tl' || corner === 'bl' ? 'left' : 'right'
+    markStageRectDirty()
+  }
+
+  /**
+   * 摆放位置。四种存档：
+   *   · corner       —— 贴死在四角之一，工具条挪侧边（**手动拖到角落吸附后存的就是这种**）
+   *   · edge + edgeY —— 贴左/右墙，竖直位置自由（吸附到墙但没到角落存的是这种）
    *   · x + y        —— 完全自由摆放
-   *   · corner       —— 老存档（左下/右下那种），读到时自动迁移成 edge 形式，竖直位置按角落换算
+   *   · 都没有        —— 首次启动，按 CFG.corner 算一次默认位置，就地存成 edge 形式
    */
   function applyPosition(layout) {
     const root = ui.root
+    if (layout.corner) {
+      applyCorner(layout.corner)
+      return
+    }
     const vh = window.innerHeight
     const h = root.getBoundingClientRect().height || 0
     const dock = dockClearance()
@@ -1837,7 +1995,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       root.style.top = clampY(layout.y, h, vh) + 'px'
       root.style.right = 'auto'
       root.style.bottom = 'auto'
-      root.dataset.edge = ''
+      delete root.dataset.edge
+      delete root.dataset.corner
+      markStageRectDirty()
       return
     }
     // 老存档 / 首次启动：按角落算一次，然后就地存成 edge 形式（下次就是新的了）
@@ -1903,9 +2063,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return out
   }
 
-  function buildMask() {
+  function buildMask(force) {
     if (!app || !model || mask.building) return
-    if (performance.now() - mask.lastBuild < 300) return
+    if (!force && performance.now() - mask.lastBuild < 300) return
     mask.building = true
     try {
       const src = app.view
@@ -2064,6 +2224,25 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     gaze.detachUntil = performance.now() + (ms || 1500)
   }
 
+  /**
+   * `ui.stage` 的屏幕矩形缓存。gazeTick 永远在跑（40ms 一次，待机也不停），
+   * 之前每次都现读 `getBoundingClientRect()`——待机的时候她根本没动，
+   * 这个矩形几十秒都不带变的，没必要每 40ms 强制触发一次布局读取。
+   * 只在真的会动/会变的地方（拖动、贴边、resize、改大小）标脏，其余时候直接用缓存。
+   */
+  let stageRect = null
+  let stageRectDirty = true
+  function markStageRectDirty() {
+    stageRectDirty = true
+  }
+  function getStageRect() {
+    if (stageRectDirty || !stageRect) {
+      stageRect = ui.stage.getBoundingClientRect()
+      stageRectDirty = false
+    }
+    return stageRect
+  }
+
   function gazeTick() {
     if (!model || !ui) return
     const now = performance.now()
@@ -2077,7 +2256,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
     const g = gazeCfg()
     if (!detached && CFG.lookAtCursor && gaze.pointer.seen) {
-      const r = ui.stage.getBoundingClientRect()
+      const r = getStageRect()
       if (r.width) {
         const dx = gaze.pointer.x - (r.left + r.width / 2)
         const dy = gaze.pointer.y - (r.top + r.height / 2)
@@ -2191,6 +2370,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       py = clampY(py + sy, h, window.innerHeight)
       el.style.left = px + 'px'
       el.style.top = py + 'px'
+      markStageRectDirty()
       if (Math.abs(sx) > 0.4 || Math.abs(sy) > 0.4) requestAnimationFrame(step)
       else saveLayout({ x: Math.round(px), y: Math.round(py), edge: null, edgeY: null, corner: null })
     }
@@ -2423,6 +2603,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     let start = null
     let leaveTimer = null
     const drag = { vx: 0, vy: 0 }
+    /**
+     * 拖动这一路上用的留白缓存：按下的时候现测一次就够了（拖动中她的轮廓不会变），
+     * 没必要跟 visualMargins() 一样每次都强制重测——那是给松手那一刻的精确判断用的，
+     * 真拖起来（pointermove 高频触发）每帧都测一次画布就太贵了。
+     */
+    let dragMargins = { left: 0, right: 0, top: 0, bottom: 0 }
 
     document.addEventListener(
       'pointermove',
@@ -2449,10 +2635,17 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
           const dy = e.clientY - start.my
           if (!dragMoved && Math.abs(dx) + Math.abs(dy) > 4) dragMoved = true
           if (dragMoved) {
-            const nh = root.getBoundingClientRect().height
-            const nx = clamp(start.left + dx, -40, window.innerWidth - 60)
-            // 竖直方向随便放，但别放到连底下三个按钮都被屏幕切掉
-            const ny = clampY(start.top + dy, nh, window.innerHeight)
+            const nRect = root.getBoundingClientRect()
+            const nh = nRect.height
+            const nw = nRect.width
+            // 原来是写死的 -40/-60 容差——现在贴角落要求看得见的边能拖到真正
+            // 贴墙，写死的小容差不够用（透明留白一大，包围盒还没到边就被卡住了，
+            // 松手时永远进不了 SNAP_DIST）。改成按这次抓起来时量到的留白放宽：
+            // 包围盒可以拖到「留白刚好出屏幕、看得见的部分刚好贴墙」那个位置。
+            const nx = clamp(start.left + dx, -dragMargins.left - 20, window.innerWidth - nw + dragMargins.right + 20)
+            // 竖直方向同理放宽；不贴角落的话，松手交给 snapOnRelease/dragInertia
+            // 各自的规矩去收（dragInertia 仍然会退回给工具条留白的安全范围）。
+            const ny = clamp(start.top + dy, -dragMargins.top - 20, window.innerHeight - nh + dragMargins.bottom + 20)
             // 身体随拖动方向摇摆：横向速度直接喂给身体的倾斜
             drag.vx = nx - (parseFloat(root.style.left) || nx)
             drag.vy = ny - (parseFloat(root.style.top) || ny)
@@ -2460,7 +2653,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
             root.style.top = ny + 'px'
             root.style.right = 'auto'
             root.style.bottom = 'auto'
-
+            markStageRectDirty()
           }
         }
         // 只记录坐标，真正的跟随在 gazeTick 里限速执行——
@@ -2483,6 +2676,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         dragging = true
         dragMoved = false
         delete root.dataset.edge // 一拖就离开墙，别再显示「贴着左边」
+        delete root.dataset.corner // 同上：一拖就离开角落，工具条先挪回下面，吸没吸得上松手再说
+        dragMargins = visualMargins()
         const r = root.getBoundingClientRect()
         start = { mx: e.clientX, my: e.clientY, left: r.left, top: r.top }
       },
@@ -2540,13 +2735,15 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     window.addEventListener('resize', () => {
       fitModel()
       const layout = readLayout()
-      // 贴着左/右墙的：重新贴住那一侧（竖直位置不变，只夹进可见范围）
-      if (layout.edge === 'left' || layout.edge === 'right') {
+      // 贴着角落 / 贴着左右墙的：重新贴住原来那个位置（角落两个方向都重新锁一遍，
+      // 贴墙的只锁那一侧，竖直位置不变，只夹进可见范围）
+      if (layout.corner || layout.edge === 'left' || layout.edge === 'right') {
         applyPosition(layout)
       } else if (root.style.left && root.style.left !== 'auto') {
         root.style.left = clamp(parseFloat(root.style.left) || 0, -40, window.innerWidth - 60) + 'px'
         root.style.top = clamp(parseFloat(root.style.top) || 0, -20, window.innerHeight - 60) + 'px'
       }
+      markStageRectDirty() // 视口本身变了，缓存的矩形肯定不准了——兜底再标一次
       clampPanels()
     })
 
@@ -3295,6 +3492,16 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (hidden) ui.bubble.hide()
     saveLayout({ hidden: !!hidden })
     if (shell.on) shell.post(hidden ? 'hidden' : 'shown')
+    // 隐藏是主人主动点的「现在不用显示她」——这种情况停渲染循环零风险
+    // （反正看不见，不存在「切回来感觉卡住」的问题，那个顾虑只针对「被遮挡但
+    // 没被隐藏」的场景，这里不碰）。桌面壳为了不让她显得卡顿，关掉了
+    // Electron 的后台降频（backgroundThrottling:false），所以 document.hidden
+    // 几乎不会在桌面壳里变 true——真正能捕捉「用户已经不需要她画面」的
+    // 时机，只有这个显式的隐藏开关。
+    if (app) {
+      if (hidden) app.ticker.stop()
+      else if (!document.hidden) app.ticker.start()
+    }
   }
 
   /**
