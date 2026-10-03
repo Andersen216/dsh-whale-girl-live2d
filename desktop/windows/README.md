@@ -6,6 +6,14 @@
 
 ---
 
+> ⚠️ **重要：请解压到「纯英文、不含空格」的路径**
+>
+> 例如 `D:\whalepet\` ✅；`D:\DeepSeek Harness\DS-WhaleGirl-Pet-Windows\` ❌（含空格）、
+> `D:\鲸鱼娘桌宠\` ❌（含中文）—— 后两种情况目前在部分机器上会**双击即闪退**
+> （退出码 `0x80000003`，Electron 在创建 userData 之前就崩，详见
+> [Issue #6](https://github.com/Andersen216/dsh-whale-girl-live2d/issues/6)）。
+> 换到纯英文无空格路径即可正常使用（已由报告者实测确认）。
+
 ## 怎么装（三步，不用开命令行）
 
 **① 先装插件**（在 DSH 里，任选一种）

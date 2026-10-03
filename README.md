@@ -551,3 +551,7 @@ dsh-whale-girl-live2d/
 *Made with 🐋 by [Andersen216](https://github.com/Andersen216) · 非商业项目，模型素材版权归原作者所有*
 
 </div>
+
+- **Windows 版双击没反应 / 一闪就退？** 先把解压目录换成**纯英文、不含空格**的路径
+  （例如 `D:\whalepet\`）。含空格或中文的路径在部分机器上会触发 Electron 启动崩溃
+  （[Issue #6](https://github.com/Andersen216/dsh-whale-girl-live2d/issues/6)），换路径即可。
