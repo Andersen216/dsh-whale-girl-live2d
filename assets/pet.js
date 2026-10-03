@@ -48,6 +48,32 @@
 
   const BASE = '/dsh-pet'
   const LS_KEY = 'dsh-live2d-pet:layout'
+
+  /**
+   * 设置持久化：把 CFG 里可序列化的值随 layout 一起存本地。
+   * 主人要求：「每次设置保存，哪怕关掉以后下次还是这样」。
+   */
+  function persistCfg() {
+    try {
+      const snap = {}
+      for (const k of Object.keys(CFG)) {
+        const v = CFG[k]
+        if (typeof v === 'number' || typeof v === 'boolean' || typeof v === 'string') snap[k] = v
+      }
+      saveLayout({ cfg: snap })
+    } catch (err) {}
+  }
+
+  /** 启动时恢复上次保存的设置 */
+  function restoreCfg() {
+    try {
+      const snap = readLayout().cfg
+      if (!snap || typeof snap !== 'object') return
+      for (const k of Object.keys(snap)) {
+        if (k in CFG) CFG[k] = snap[k]
+      }
+    } catch (err) {}
+  }
   const MOTION_PRIORITY = { NONE: 0, IDLE: 1, NORMAL: 2, FORCE: 3 }
   /**
    * 取景模式。这个模型是一整张「书桌场景」而不是半身立绘，直接整体显示会又小又占地方。
@@ -1848,6 +1874,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const root = ui.root
     // 外观档位：跟随系统（默认）/ 浅色 / 深色 —— 手动选过就按本地的来
     try {
+      restoreCfg()
       const th = readLayout().theme
       if (th === 'light' || th === 'dark') root.dataset.dshpTheme = th
     } catch (err) {}
@@ -3732,6 +3759,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       out.style.opacity = '.7'
       r.addEventListener('input', () => {
         CFG[key] = Number(r.value)
+        persistCfg()
         out.textContent = fmt(Number(r.value))
       })
       l.append(r, out)
@@ -3775,11 +3803,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const eyeBtn = $('button', 'dshp-btn', CFG.lookAtCursor ? '视线跟随：开' : '视线跟随：关')
     eyeBtn.addEventListener('click', () => {
       CFG.lookAtCursor = !CFG.lookAtCursor
+      persistCfg()
       eyeBtn.textContent = CFG.lookAtCursor ? '视线跟随：开' : '视线跟随：关'
     })
     const mouthBtn = $('button', 'dshp-btn', CFG.talkMouth ? '说话口型：开' : '说话口型：关')
     mouthBtn.addEventListener('click', () => {
       CFG.talkMouth = !CFG.talkMouth
+      persistCfg()
       mouthBtn.textContent = CFG.talkMouth ? '说话口型：开' : '说话口型：关'
     })
     row1.append(eyeBtn, mouthBtn)
