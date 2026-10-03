@@ -2150,7 +2150,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     let following = false
 
     const g = gazeCfg()
-    if (!detached && CFG.lookAtCursor && gaze.pointer.seen) {
+    // 指针超过 2 秒没有更新（桌面版壳子停止喂数据 / 鼠标离开跟踪源）→ 视为脱离，
+    // 不再盯着最后那个方向，而是回正脸（主人要求：找不到光标就朝前看）
+    const pointerFresh = gaze.pointer.seen && now - (gaze.pointer.at || 0) < 2000
+    if (!detached && CFG.lookAtCursor && pointerFresh) {
       const r = ui.stage.getBoundingClientRect()
       if (r.width) {
         const dx = gaze.pointer.x - (r.left + r.width / 2)
@@ -2172,14 +2175,17 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     } else {
       // 没人管它：自己看东看西、想事情
       gaze.mode = detached ? 'detach' : 'idle'
+      // 主人要求：脱离跟随就「回正脸」，不要老歪着斜眼看一个地方，也不能长时间卡住。
+      // 所以游移幅度从 ±0.5 收到 ±0.11（基本朝前），间隔也缩短，不再一盯好几秒。
       if (now > gaze.nextDrift) {
-        gaze.nextDrift = now + 1800 + Math.random() * 4200
-        gaze.driftX = (Math.random() * 2 - 1) * (detached ? 0.16 : 0.5)
-        gaze.driftY = (Math.random() * 2 - 1) * (detached ? 0.1 : 0.32)
+        gaze.nextDrift = now + 1100 + Math.random() * 1800
+        gaze.driftX = (Math.random() * 2 - 1) * (detached ? 0.07 : 0.11)
+        gaze.driftY = (Math.random() * 2 - 1) * (detached ? 0.05 : 0.09)
       }
       const t = now / 1000
-      wantX = gaze.driftX + Math.sin(t * 0.37) * 0.07
-      wantY = gaze.driftY + Math.cos(t * 0.29) * 0.05
+      // 明确往「正脸」收：游移只作为一点点生气，而不是主基调
+      wantX = gaze.driftX * 0.85 + Math.sin(t * 0.37) * 0.045
+      wantY = gaze.driftY * 0.85 + Math.cos(t * 0.29) * 0.035
     }
 
     // 低头看资料：只是给视线加一个纵向偏置，仍然受同一个限速器约束，
@@ -2543,6 +2549,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         gaze.pointer.x = e.clientX
         gaze.pointer.y = e.clientY
         gaze.pointer.seen = true
+        gaze.pointer.at = performance.now()   // 记时间：脱离跟随太久就回正脸
       },
       { passive: true },
     )
