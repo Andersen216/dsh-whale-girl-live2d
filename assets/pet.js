@@ -583,6 +583,15 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   width:max-content;white-space:nowrap;
   pointer-events:auto;opacity:0;transition:opacity .22s ease}
 .dshp-root.dshp-hover .dshp-dock,.dshp-root.dshp-open .dshp-dock{opacity:1}
+/* 菜单/设置内容过长时**可滚动**（鼠标滚轮、触控板直接搓都行）。
+   ⚠️ 这里刻意只给「内容区」限高 + overflow，**不把面板改成 flex 容器** ——
+   上次那样改会让内容区塌成 0 高（框弹出来但是空的）。 */
+.dshp-panes{max-height:calc(100vh - 180px);overflow-y:auto;overflow-x:hidden;
+  overscroll-behavior:contain;scrollbar-width:thin}
+.dshp-panes::-webkit-scrollbar{width:8px}
+.dshp-panes::-webkit-scrollbar-thumb{background:rgba(120,140,180,.45);border-radius:4px}
+.dshp-panes::-webkit-scrollbar-track{background:transparent}
+.dshp-hud{max-height:calc(100vh - 40px);overflow-y:auto;overscroll-behavior:contain}
 .dshp-btn{border:1px solid var(--dshp-line);background:var(--dshp-bg);color:var(--dshp-fg);
   border-radius:calc(11px * var(--dshp-ds));flex:0 0 auto;white-space:nowrap;
   padding:calc(5px * var(--dshp-ds)) calc(11px * var(--dshp-ds));
