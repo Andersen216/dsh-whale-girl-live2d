@@ -261,6 +261,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             // 于是这次拖动被交给网页，只能在窗口范围内挪 → 主人感觉「有边界拖不动」。
             overPanel = false
             updateHit()
+            refreshGeo()        // 点一下就刷一次几何：切页签/展开后缓存立刻跟上，避免下一次点不中
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
                 guard let self else { return }
                 self.log("按下判定: overPanel=\(self.overPanel) 鼠标=(\(Int(self.downAt.x)),\(Int(self.downAt.y)))")
@@ -396,15 +397,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         // ——— 本地快速判定（不碰网页）———
         // 她只占窗口的一小块；鼠标不在她的范围、也不在任何面板里时，直接判「穿透」，
         // 省掉一次 IPC + elementFromPoint + 逐像素采样。这一步把 90% 的探针变成纯计算。
-        if let g = geo, Date().timeIntervalSince(geoAt) < 6 {
+        // 缓存只信 1.2 秒；而且**必须留余量** ——
+        // 主人反馈「设置里那些东西老点不着、点她也点不中」：切页签/换内容时面板高度会变，
+        // 下半部分落到缓存矩形之外就被判成「空白」→ 点击直接穿透过去 ✗
+        // 现在：① 矩形向外扩 40px ② 缓存过期时不猜、老老实实去问网页。
+        let age = Date().timeIntervalSince(geoAt)
+        if let g = geo, age < 1.2 {
             let p = CGPoint(x: m.x - f.minX, y: f.maxY - m.y)   // 转成页面坐标（原点在左上）
-            if !g.stage.contains(p) && !g.panels.contains(where: { $0.contains(p) }) {
+            let margin: CGFloat = 40
+            let hitStage = g.stage.insetBy(dx: -margin, dy: -margin).contains(p)
+            let hitPanel = g.panels.contains(where: { $0.insetBy(dx: -margin, dy: -margin).contains(p) })
+            if !hitStage && !hitPanel {
                 statLocal += 1
                 if inside { setInside(false) }
                 return
             }
-        } else if Date().timeIntervalSince(geoAt) > 1 {
-            refreshGeo()        // 几何过期就顺手刷新（异步，不阻塞）
+        } else if age > 0.35 {
+            refreshGeo()        // 缓存过期就立刻刷新，并且这一拍仍然走下面的「问网页」分支（不猜）
         }
         if !f.contains(m) { setInside(false); return }
         let x = m.x - f.minX

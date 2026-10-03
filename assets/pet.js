@@ -586,6 +586,15 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 /* 菜单/设置内容过长时**可滚动**（鼠标滚轮、触控板直接搓都行）。
    ⚠️ 这里刻意只给「内容区」限高 + overflow，**不把面板改成 flex 容器** ——
    上次那样改会让内容区塌成 0 高（框弹出来但是空的）。 */
+/* ——— 菜单面板：固定大小 + 固定位置（切页签/切动作都不再变来变去）———
+   ① 宽高写死（高度也随屏幕兜底），所以「表情 / 装饰 / 场景 / 动作 / 设置」五个页签
+      切换时面板尺寸完全一致，不会跳、不会时大时小；
+   ② 内容超出就在内容区内部滚动（鼠标滚轮/触控板直接搓）；
+   ③ 面板高度留够，永远排在她头顶上方，不会盖住她本人。
+   ⚠️ 这里用「固定高度 + 百分比内容区」，**不用 flex 容器** —— flex+min-height:0
+   会让内容区塌成 0 高（框弹出来但是空的），我们踩过这个坑。 */
+.dshp-menu{width:382px!important;height:min(442px, calc(100vh - 210px))!important}
+.dshp-menu .dshp-panes{height:calc(100% - 44px)!important;max-height:none!important}
 .dshp-panes{max-height:calc(100vh - 180px);overflow-y:auto;overflow-x:hidden;
   overscroll-behavior:contain;scrollbar-width:thin}
 .dshp-panes::-webkit-scrollbar{width:8px}
