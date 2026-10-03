@@ -604,16 +604,17 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-btn{font-size:12.5px;padding:7px 12px;border-radius:9px}
 
 /* 面板本体裁掉一切溢出（物理上不可能再出现「文字跑到框外面」） */
-.dshp-menu{width:332px!important;height:min(372px, calc(100vh - 170px))!important;
+.dshp-menu{width:360px!important;height:min(300px, calc(100vh - 200px))!important;
   overflow:hidden!important;box-sizing:border-box!important}
 /* 内容区：给出**明确的像素高度**（不依赖百分比解析），并保持可滚动。
    ⚠️ 上一版这里写的是 max-height:none —— 它把负责限高的那条规则干掉了，
    于是内容直接溢出到框外（主人截图里文字跑出面板就是这个原因）。 */
 .dshp-menu .dshp-panes{
-  height:calc(min(372px, 100vh - 170px) - 42px)!important;
-  max-height:calc(min(372px, 100vh - 170px) - 42px)!important;
+  height:calc(min(300px, 100vh - 200px) - 42px)!important;
+  max-height:calc(min(300px, 100vh - 200px) - 42px)!important;
   overflow-y:auto!important;overflow-x:hidden!important;
-  overscroll-behavior:contain;padding-right:2px}
+  overscroll-behavior:contain;padding-right:12px;
+  scrollbar-gutter:stable}
 .dshp-panes{max-height:calc(100vh - 180px);overflow-y:auto;overflow-x:hidden;
   overscroll-behavior:contain;scrollbar-width:thin}
 .dshp-panes::-webkit-scrollbar{width:8px}
@@ -2070,8 +2071,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   function gazeCfg() {
     return {
       radius: CFG.gazeRadius === undefined ? 0 : Number(CFG.gazeRadius),
-      gain: CFG.gazeGain === undefined ? 0.78 : Number(CFG.gazeGain),
-      rate: CFG.gazeRate === undefined ? 1.6 : Number(CFG.gazeRate),
+      // 原作者在 VTube 配置里：眼珠平滑 0（零延迟）、头部 31/32、歪头 85（很软）。
+      // 我们这边是整套一起平滑，所以先把默认值调快，让『眼珠优先跟手』的感觉出来；
+      // 严格的分组延迟需要动 rig 层，见 README 的 TODO。滑块仍然可以实时微调。
+      gain: CFG.gazeGain === undefined ? 0.9 : Number(CFG.gazeGain),
+      rate: CFG.gazeRate === undefined ? 3.2 : Number(CFG.gazeRate),
     }
   }
 
