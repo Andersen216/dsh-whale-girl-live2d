@@ -594,14 +594,14 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    ⚠️ 这里用「固定高度 + 百分比内容区」，**不用 flex 容器** —— flex+min-height:0
    会让内容区塌成 0 高（框弹出来但是空的），我们踩过这个坑。 */
 /* 面板本体裁掉一切溢出（物理上不可能再出现「文字跑到框外面」） */
-.dshp-menu{width:382px!important;height:min(442px, calc(100vh - 210px))!important;
+.dshp-menu{width:270px!important;height:min(312px, calc(100vh - 190px))!important;
   overflow:hidden!important;box-sizing:border-box!important}
 /* 内容区：给出**明确的像素高度**（不依赖百分比解析），并保持可滚动。
    ⚠️ 上一版这里写的是 max-height:none —— 它把负责限高的那条规则干掉了，
    于是内容直接溢出到框外（主人截图里文字跑出面板就是这个原因）。 */
 .dshp-menu .dshp-panes{
-  height:calc(min(442px, 100vh - 210px) - 46px)!important;
-  max-height:calc(min(442px, 100vh - 210px) - 46px)!important;
+  height:calc(min(312px, 100vh - 190px) - 42px)!important;
+  max-height:calc(min(312px, 100vh - 190px) - 42px)!important;
   overflow-y:auto!important;overflow-x:hidden!important;
   overscroll-behavior:contain;padding-right:2px}
 .dshp-panes{max-height:calc(100vh - 180px);overflow-y:auto;overflow-x:hidden;
@@ -2325,6 +2325,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const menu = $('div', 'dshp-panel dshp-menu')
     const tabs = $('div', 'dshp-tabs')
     const panes = $('div')
+    panes.classList.add('dshp-panes')
     menu.append(tabs, panes)
     addCloseButton(menu)
 
