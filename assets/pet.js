@@ -593,15 +593,25 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    ③ 面板高度留够，永远排在她头顶上方，不会盖住她本人。
    ⚠️ 这里用「固定高度 + 百分比内容区」，**不用 flex 容器** —— flex+min-height:0
    会让内容区塌成 0 高（框弹出来但是空的），我们踩过这个坑。 */
+/* 外观：跟随系统 / 浅色 / 深色 —— 手动档位覆盖系统媒体查询 */
+.dshp-root[data-dshp-theme="light"]{--dshp-fg:#132043;--dshp-bg:rgba(246,249,255,.96);
+  --dshp-line:rgba(30,60,130,.14);--dshp-accent:#3b62f6}
+.dshp-root[data-dshp-theme="dark"]{--dshp-fg:#eaf0ff;--dshp-bg:rgba(18,26,48,.95);
+  --dshp-line:rgba(140,175,255,.20);--dshp-accent:#7b9bff}
+/* 苹果风的克制排版：说明文字更小、更淡；控件行距更松 */
+.dshp-hint{font-size:11px;opacity:.62;line-height:1.5}
+.dshp-label{font-size:12.5px}
+.dshp-btn{font-size:12.5px;padding:7px 12px;border-radius:9px}
+
 /* 面板本体裁掉一切溢出（物理上不可能再出现「文字跑到框外面」） */
-.dshp-menu{width:270px!important;height:min(312px, calc(100vh - 190px))!important;
+.dshp-menu{width:332px!important;height:min(372px, calc(100vh - 170px))!important;
   overflow:hidden!important;box-sizing:border-box!important}
 /* 内容区：给出**明确的像素高度**（不依赖百分比解析），并保持可滚动。
    ⚠️ 上一版这里写的是 max-height:none —— 它把负责限高的那条规则干掉了，
    于是内容直接溢出到框外（主人截图里文字跑出面板就是这个原因）。 */
 .dshp-menu .dshp-panes{
-  height:calc(min(312px, 100vh - 190px) - 42px)!important;
-  max-height:calc(min(312px, 100vh - 190px) - 42px)!important;
+  height:calc(min(372px, 100vh - 170px) - 42px)!important;
+  max-height:calc(min(372px, 100vh - 170px) - 42px)!important;
   overflow-y:auto!important;overflow-x:hidden!important;
   overscroll-behavior:contain;padding-right:2px}
 .dshp-panes{max-height:calc(100vh - 180px);overflow-y:auto;overflow-x:hidden;
@@ -1835,6 +1845,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   /** 贴住某一侧墙：left/right + top 固定，竖直位置由主人自己定 */
   function applyEdge(edge, y) {
     const root = ui.root
+    // 外观档位：跟随系统（默认）/ 浅色 / 深色 —— 手动选过就按本地的来
+    try {
+      const th = readLayout().theme
+      if (th === 'light' || th === 'dark') root.dataset.dshpTheme = th
+    } catch (err) {}
+
     const yy = clampY(Number(y) || 0, root.getBoundingClientRect().height || 0, window.innerHeight)
     root.style.left = edge === 'left' ? EDGE_GAP + 'px' : 'auto'
     root.style.right = edge === 'right' ? EDGE_GAP + 'px' : 'auto'
@@ -3718,11 +3734,38 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       return l
     }
     box.append(
-      $('div', 'dshp-hint', '视线灵敏度（拖动即时生效）'),
+      $('div', 'dshp-hint', '视线灵敏度'),
       mkGaze('跟随幅度', 'gazeGain', 0, 1, 0.02, g0.gain, (v) => v.toFixed(2)),
       mkGaze('跟随速度', 'gazeRate', 0.3, 4, 0.1, g0.rate, (v) => v.toFixed(1)),
       mkGaze('跟随范围', 'gazeRadius', 0, 2000, 50, g0.radius, (v) => (v <= 0 ? '整屏' : String(v))),
     )
+
+    // 外观：跟随系统 / 浅色 / 深色 —— 手动档位覆盖系统设置，选择记在本地
+    const themeRow = $('div', 'dshp-row')
+    const themeBtns = [['auto', '跟随系统'], ['light', '浅色'], ['dark', '深色']].map(([v, label]) => {
+      const btn = $('button', 'dshp-btn', label)
+      btn.addEventListener('click', () => {
+        for (const [val, b] of themeBtns) b.classList.toggle('dshp-primary', val === v)
+        if (v === 'auto') {
+          delete ui.root.dataset.dshpTheme
+          saveLayout({ theme: null })
+        } else {
+          ui.root.dataset.dshpTheme = v
+          saveLayout({ theme: v })
+        }
+        clampPanels()
+      })
+      return [v, btn]
+    })
+    const savedTheme = (() => {
+      try {
+        return readLayout().theme || 'auto'
+      } catch (err) {
+        return 'auto'
+      }
+    })()
+    for (const [val, b] of themeBtns) b.classList.toggle('dshp-primary', val === savedTheme)
+    themeRow.append(...themeBtns.map(([, b]) => b))
 
     const row1 = $('div', 'dshp-row')
     const eyeBtn = $('button', 'dshp-btn', CFG.lookAtCursor ? '视线跟随：开' : '视线跟随：关')
@@ -3745,7 +3788,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       ui.bubble.show('回到平常状态啦', { name: 'DS 鲸鱼娘', ttl: 2200 })
     })
     row0.appendChild(resetAll)
-    box.append(row0, $('div', 'dshp-hint', '点它就把表情、道具、姿势、位置全部恢复成「拿本子拿笔」的正常状态。'))
+    box.append(themeRow, row0)
 
     const row2 = $('div', 'dshp-row')
     const reset = $('button', 'dshp-btn', '回到角落')
@@ -3773,7 +3816,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         setTimeout(() => shell.post('quit'), 220)
       })
       row3.append(toBall, quitApp)
-      box.append(row3, $('div', 'dshp-hint', '「收起」= 缩成贴边的悬浮小球；「关闭」= 真正退出这个桌面 App。'))
+      box.append(row3)
     }
     box.append(
       row1,
