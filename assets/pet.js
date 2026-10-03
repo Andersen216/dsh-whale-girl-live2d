@@ -593,8 +593,17 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    ③ 面板高度留够，永远排在她头顶上方，不会盖住她本人。
    ⚠️ 这里用「固定高度 + 百分比内容区」，**不用 flex 容器** —— flex+min-height:0
    会让内容区塌成 0 高（框弹出来但是空的），我们踩过这个坑。 */
-.dshp-menu{width:382px!important;height:min(442px, calc(100vh - 210px))!important}
-.dshp-menu .dshp-panes{height:calc(100% - 44px)!important;max-height:none!important}
+/* 面板本体裁掉一切溢出（物理上不可能再出现「文字跑到框外面」） */
+.dshp-menu{width:382px!important;height:min(442px, calc(100vh - 210px))!important;
+  overflow:hidden!important;box-sizing:border-box!important}
+/* 内容区：给出**明确的像素高度**（不依赖百分比解析），并保持可滚动。
+   ⚠️ 上一版这里写的是 max-height:none —— 它把负责限高的那条规则干掉了，
+   于是内容直接溢出到框外（主人截图里文字跑出面板就是这个原因）。 */
+.dshp-menu .dshp-panes{
+  height:calc(min(442px, 100vh - 210px) - 46px)!important;
+  max-height:calc(min(442px, 100vh - 210px) - 46px)!important;
+  overflow-y:auto!important;overflow-x:hidden!important;
+  overscroll-behavior:contain;padding-right:2px}
 .dshp-panes{max-height:calc(100vh - 180px);overflow-y:auto;overflow-x:hidden;
   overscroll-behavior:contain;scrollbar-width:thin}
 .dshp-panes::-webkit-scrollbar{width:8px}
