@@ -52,6 +52,9 @@ let tray = null
 let pollTimer = null
 let dragTimer = null
 let dragFrom = null
+// 贴边小球单独一份拖动状态：原来和主窗口共用 dragFrom，收起状态下按小球会把
+// 已经 hide() 的主窗口一路搬走（B站/PR 反馈的真实 bug）
+let ballDrag = null
 let collapsed = false
 let lowPower = false
 let overPanel = false
@@ -168,12 +171,26 @@ function createMain() {
     if (failCount >= 3) showHint()
     setTimeout(load, 5000)
   })
-  win.on('moved', savePos)
+  // 窗口移动：越界就拉回来（拔掉外接屏 / 改分辨率后可能跑到屏幕外），
+  // 写盘节流到 400ms —— 原来每个 moved 事件都写一次，拖动时非常费（PR 反馈）
+  win.on('moved', () => {
+    if (!win || win.isDestroyed()) return
+    const [x, y] = win.getPosition()
+    const [cx, cy] = clampToDisplays(x, y)
+    if (cx !== x || cy !== y) win.setPosition(cx, cy)
+    const now = Date.now()
+    if (now - (globalThis.__lastSaveAt || 0) > 400) {
+      globalThis.__lastSaveAt = now
+      savePos()
+    }
+  })
   win.on('closed', () => { win = null })
 
   // 拖动：页面里按下她 → 交给主进程搬窗口（拖动期间用 16ms 快速轮询，跟手）
   ipcMain.on('drag-start', async (_e, at) => {
-    if (!win) return
+    // 小球用的是同一个 preload，也会发 drag-start；主窗口只是 hide() 没 destroy()，
+    // 不加这条守卫就会把看不见的主窗口搬走（PR 反馈）
+    if (!win || win.isDestroyed() || !win.isVisible()) return
     // ⚠️ 不能直接用 overPanel（那是 90ms 轮询的上一次结果）：
     // 按下那一刻它恰好是 panel 时，这次拖动就被让给网页，只能在窗口内挪、整个窗口搬不动。
     // B 站 @F0rsEn 反馈的正是这条。改成「按下瞬间重新判一次」，几十毫秒的等待对拖动没影响。
@@ -319,6 +336,20 @@ function readPos() {
   return null
 }
 
+/** 把窗口夹进「所有显示器工作区的并集」，越界就返回修正后的坐标 */
+function clampToDisplays(x, y) {
+  try {
+    const areas = screen.getAllDisplays().map((d) => d.workArea)
+    const w = 200, h = 120 // 只保证还有一块可见区域，允许半出屏（窗子本身很大）
+    const inside = areas.some((a) => x + w > a.x && x < a.x + a.width && y + h > a.y && y < a.y + a.height)
+    if (inside) return [x, y]
+    const p = screen.getPrimaryDisplay().workArea
+    return [p.x + p.width - 560, p.y + p.height - 300]
+  } catch (e) {
+    return [x, y]
+  }
+}
+
 function savePos() {
   if (!win || win.isDestroyed()) return
   const [x, y] = win.getPosition()
@@ -440,8 +471,8 @@ function createBall() {
     `).catch(() => {})
   })
   ipcMain.on('ball-move', (_e, dx, dy) => {
-    if (!ballWin || !dragFrom) return
-    ballWin.setPosition(dragFrom[0] + dx, dragFrom[1] + dy)
+    if (!ballWin || !ballDrag) return
+    ballWin.setPosition(Math.round(ballDrag[0] + dx), Math.round(ballDrag[1] + dy))
   })
   ipcMain.on('ball-drop', (_e, moved) => {
     if (!ballWin) return
@@ -471,7 +502,7 @@ function collapse() {
   ballWin.showInactive()
   ballWin.setAlwaysOnTop(true, 'screen-saver')
   win.hide()
-  dragFrom = [ballWin.getPosition()[0], ballWin.getPosition()[1]]
+  ballDrag = [ballWin.getPosition()[0], ballWin.getPosition()[1]]
   setTimeout(snapBall, 30)
 }
 
@@ -479,7 +510,7 @@ function expand() {
   if (!collapsed) return
   collapsed = false
   if (ballWin) {
-    dragFrom = null
+    ballDrag = null
     ballWin.hide()
   }
   if (win) {
