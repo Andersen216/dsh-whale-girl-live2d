@@ -254,10 +254,15 @@ function createMain() {
       if (lastCursor && Math.abs(lastCursor.x - p.x) < 1 && Math.abs(lastCursor.y - p.y) < 1) return
       lastCursor = p
       const b = win.getBounds()
+      // 把「整个屏幕」映射到窗口坐标里（与 macOS 同理）：
+      // 否则鼠标跑到窗口外就会被夹住，看着像「到屏幕边缘就不跟了」。
+      const disp = screen.getDisplayNearestPoint(p).bounds
+      const nx = (p.x - disp.x) / Math.max(1, disp.width)
+      const ny = (p.y - disp.y) / Math.max(1, disp.height)
       win.webContents.sendInputEvent({
         type: 'mouseMove',
-        x: Math.round(p.x - b.x),
-        y: Math.round(p.y - b.y),
+        x: Math.round(nx * b.width),
+        y: Math.round(ny * b.height),
       })
     } catch (e) {}
   }, 16)

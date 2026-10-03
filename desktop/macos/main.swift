@@ -130,8 +130,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             if let last = self.lastCursor, abs(last.x - m.x) < 1, abs(last.y - m.y) < 1 { return }
             self.lastCursor = m
             let f = self.win.frame
-            let x = Int(m.x - f.minX)
-            let y = Int(f.maxY - m.y)
+            // ⚠️ 关键：把**整个屏幕**线性映射到窗口坐标里再喂给页面。
+            // 原来直接用窗口坐标 → 鼠标一旦跑到窗口外（比如屏幕最右边），
+            // 归一化后就超出范围被夹住 → 表现就是主人说的「鼠标到最右边她就不跟了」。
+            // 映射之后：屏幕最左→0、最右→窗口宽，页面归一化正好拿到 ±1，全屏都能跟。
+            let scr = (NSScreen.screens.first { $0.frame.contains(m) } ?? NSScreen.main)?.frame ?? f
+            let nx = (m.x - scr.minX) / max(1, scr.width)
+            let ny = 1 - (m.y - scr.minY) / max(1, scr.height)
+            let x = Int(nx * f.width)
+            let y = Int(ny * f.height)
             self.web.evaluateJavaScript(
                 "window.dispatchEvent(new MouseEvent('mousemove',{clientX:\(x),clientY:\(y),bubbles:true}))",
                 completionHandler: nil)
