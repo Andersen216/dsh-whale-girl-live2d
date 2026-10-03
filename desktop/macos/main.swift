@@ -120,10 +120,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         // 页面的视线靠 mousemove 驱动，但**窗口外的鼠标移动它收不到**，所以她"不看我鼠标"。
         // 这里定时把全局光标位置合成成 mousemove 事件喂进页面 —— 前端一行都不用改，
         // 全屏任何位置她都能看过来。（只在鼠标真的动了时才喂，几乎不增加开销。）
-        cursorFeed = Timer.scheduledTimer(withTimeInterval: 0.06, repeats: true) { [weak self] _ in
+        // 频率必须贴近网页版：浏览器原生 mousemove 每秒几十上百次，
+        // 我们原来 60ms(≈16Hz) + 3px 死区 → 目标点是**跳着给的**，
+        // 表现就是主人说的「一卡一卡、像齿轮没润滑油」。
+        // 现在 16ms(≈60Hz) + 1px 死区，和网页版同一量级。
+        cursorFeed = Timer.scheduledTimer(withTimeInterval: 0.016, repeats: true) { [weak self] _ in
             guard let self, self.win.isVisible, !self.shellDrag else { return }
             let m = NSEvent.mouseLocation
-            if let last = self.lastCursor, abs(last.x - m.x) < 3, abs(last.y - m.y) < 3 { return }
+            if let last = self.lastCursor, abs(last.x - m.x) < 1, abs(last.y - m.y) < 1 { return }
             self.lastCursor = m
             let f = self.win.frame
             let x = Int(m.x - f.minX)

@@ -250,7 +250,8 @@ function createMain() {
     try {
       if (!win || win.isDestroyed() || !win.isVisible() || dragTimer) return
       const p = screen.getCursorScreenPoint()
-      if (lastCursor && Math.abs(lastCursor.x - p.x) < 3 && Math.abs(lastCursor.y - p.y) < 3) return
+      // 与 macOS 同理：原来 60ms + 3px 死区会让视线目标「跳着给」，看着卡
+      if (lastCursor && Math.abs(lastCursor.x - p.x) < 1 && Math.abs(lastCursor.y - p.y) < 1) return
       lastCursor = p
       const b = win.getBounds()
       win.webContents.sendInputEvent({
@@ -259,7 +260,7 @@ function createMain() {
         y: Math.round(p.y - b.y),
       })
     } catch (e) {}
-  }, 60)
+  }, 16)
   pollTimer = setInterval(poll, 90)
   win.once('ready-to-show', () => {
     win.showInactive()
