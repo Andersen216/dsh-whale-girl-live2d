@@ -73,6 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     var ballAt = NSPoint.zero
     var ballMoved: CGFloat = 0
     var hiddenWatch: Timer?
+    var cursorFeed: Timer?
+    var lastCursor: NSPoint?
     var health2: Timer?
     var launchedAt = Date()
     var failCount = 0
@@ -114,6 +116,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         win.orderFrontRegardless()
         ensureVisible()
         load()
+        // ——— 全屏视线追踪 ———
+        // 页面的视线靠 mousemove 驱动，但**窗口外的鼠标移动它收不到**，所以她"不看我鼠标"。
+        // 这里定时把全局光标位置合成成 mousemove 事件喂进页面 —— 前端一行都不用改，
+        // 全屏任何位置她都能看过来。（只在鼠标真的动了时才喂，几乎不增加开销。）
+        cursorFeed = Timer.scheduledTimer(withTimeInterval: 0.06, repeats: true) { [weak self] _ in
+            guard let self, self.win.isVisible, !self.shellDrag else { return }
+            let m = NSEvent.mouseLocation
+            if let last = self.lastCursor, abs(last.x - m.x) < 3, abs(last.y - m.y) < 3 { return }
+            self.lastCursor = m
+            let f = self.win.frame
+            let x = Int(m.x - f.minX)
+            let y = Int(f.maxY - m.y)
+            self.web.evaluateJavaScript(
+                "window.dispatchEvent(new MouseEvent('mousemove',{clientX:\(x),clientY:\(y),bubbles:true}))",
+                completionHandler: nil)
+        }
+
         probe = Timer.scheduledTimer(withTimeInterval: 0.09, repeats: true) { [weak self] _ in
             self?.updateHit()
         }

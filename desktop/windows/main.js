@@ -50,6 +50,8 @@ let win = null
 let ballWin = null
 let tray = null
 let pollTimer = null
+let cursorFeed = null
+let lastCursor = null
 let dragTimer = null
 let dragFrom = null
 // 贴边小球单独一份拖动状态：原来和主窗口共用 dragFrom，收起状态下按小球会把
@@ -241,6 +243,23 @@ function createMain() {
   })
 
   load()
+  // ——— 全屏视线追踪 ———
+  // 页面只能看到窗口内的鼠标；窗口外的移动它收不到 → 她"不看你鼠标"。
+  // 用 Electron 原生 sendInputEvent 把全局光标位置喂进去（比 executeJavaScript 省得多）。
+  cursorFeed = setInterval(() => {
+    try {
+      if (!win || win.isDestroyed() || !win.isVisible() || dragTimer) return
+      const p = screen.getCursorScreenPoint()
+      if (lastCursor && Math.abs(lastCursor.x - p.x) < 3 && Math.abs(lastCursor.y - p.y) < 3) return
+      lastCursor = p
+      const b = win.getBounds()
+      win.webContents.sendInputEvent({
+        type: 'mouseMove',
+        x: Math.round(p.x - b.x),
+        y: Math.round(p.y - b.y),
+      })
+    } catch (e) {}
+  }, 60)
   pollTimer = setInterval(poll, 90)
   win.once('ready-to-show', () => {
     win.showInactive()
