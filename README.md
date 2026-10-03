@@ -1,5 +1,32 @@
 <div align="center">
 
+
+## 🚀 网页版一键部署（不用懂命令行）
+
+DSH 网页版原来要自己装 Node、装 CLI、起服务、再装插件 —— 现在一条命令搞定：
+
+```bash
+# macOS / Linux / WSL：起网页版（自动挑空闲端口、自动打开浏览器）
+curl -fsSL https://raw.githubusercontent.com/Andersen216/dsh-whale-girl-live2d/main/tools/dsh-web-deploy.sh | bash
+
+# 想连桌宠插件一起装好
+curl -fsSL https://raw.githubusercontent.com/Andersen216/dsh-whale-girl-live2d/main/tools/dsh-web-deploy.sh | bash -s -- --with-pet
+```
+
+Windows：下载仓库里的 `tools/dsh-web-deploy.cmd` **双击运行**（内部走 PowerShell，
+已绕开执行策略；⚠️ 作者没有 Windows 机器，这版**尚未真机验证**）。
+
+**它做了什么**：检查 Node（≥20）→ 复用已装的 dsh（没有就用 `npm exec` 免安装跑）→
+用官方支持的 `--port 0` 让系统挑空闲端口 → 抓出带登录 token 的地址 → 自动开浏览器 →
+（可选）装桌宠插件。
+
+**子命令**：`--doctor` 只体检不起服务 · `stop` 停止 · `status` 看状态。
+状态记在 `~/.dsh/.web-deploy.json`（**只存 pid/端口/时间，不存 token**）。
+
+> 为什么不用现成的？调研了一圈（2026-10-03），社区 6 个「一键部署」项目**全是 Windows 专用**
+> （.cmd / PowerShell / WinForms），macOS/Linux 的 `curl | bash` 是空白；而且多数选择
+> 「下便携 Node + 拉源码 + 完整构建」这条 2–4GB 的重路径 —— 其实 `npm exec` 直接跑官方包即可。
+
 ## 兼容性（重要）
 
 | 宿主 | 状态 |
