@@ -133,10 +133,28 @@ async function poll() {
 // ——————————————————————————————————————————————————————————————
 // 主窗口
 // ——————————————————————————————————————————————————————————————
+// 可选开关：默认关闭。读不到文件 / 解析失败 / 字段不是 true → 一律 false ✓
+// 打开方式：在 userData 目录的 settings.json 里写 {"fullscreenPrimary": true}
+//   Windows 上通常是 %APPDATA%\DS-WhaleGirl-Pet\settings.json（就是 Electron 的 userData 目录，取 productName 优先）
+function readFullscreenPrimary() {
+  try {
+    const p = path.join(app.getPath('userData'), 'settings.json')
+    return JSON.parse(fs.readFileSync(p, 'utf8')).fullscreenPrimary === true
+  } catch {
+    return false
+  }
+}
+
 function createMain() {
+  // 铺满主屏后：「她在哪」不再受窗口边界约束，拖动就能到主屏任意位置 ✓
+  // 空白处仍然点击穿透（见下面的 setIgnoreMouseEvents）✓
+  const FULLSCREEN_PRIMARY = readFullscreenPrimary()
+  const waFs = screen.getPrimaryDisplay().workArea
   win = new BrowserWindow({
-    width: WIN_W,
-    height: WIN_H,
+    width: FULLSCREEN_PRIMARY ? waFs.width : WIN_W,
+    height: FULLSCREEN_PRIMARY ? waFs.height : WIN_H,
+    x: FULLSCREEN_PRIMARY ? waFs.x : undefined,
+    y: FULLSCREEN_PRIMARY ? waFs.y : undefined,
     frame: false,
     transparent: true,
     resizable: false,
@@ -155,8 +173,11 @@ function createMain() {
   win.setMenuBarVisibility(false)
 
   const wa = screen.getPrimaryDisplay().workArea
-  const saved = readPos()
-  win.setPosition(saved ? saved[0] : wa.x + wa.width - WIN_W - 8, saved ? saved[1] : wa.y + wa.height - WIN_H - 8)
+  if (!FULLSCREEN_PRIMARY) {
+    const saved = readPos()
+    win.setPosition(saved ? saved[0] : wa.x + wa.width - WIN_W - 8, saved ? saved[1] : wa.y + wa.height - WIN_H - 8)
+  }
+  // 全屏模式下窗口自己就铺满主屏，不需要（也不该）恢复历史位置 ✓
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
